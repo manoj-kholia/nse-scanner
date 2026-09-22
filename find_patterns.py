@@ -35,10 +35,11 @@ OUT_TV = os.path.join(HERE, "handle_watchlist.txt")
 # --- pattern rules (mirror the Pine script defaults) -------------------------
 P = dict(
     piv=5,               # pivot strength, bars each side
-    cup_min=30,          # 6 weeks
+    cup_min=30,          # 6 weeks of cup...
+    base_min=35,         # ...but 7 weeks minimum for cup + handle together
     cup_max=250,         # 50 weeks
     depth_min=0.12,
-    depth_max=0.40,
+    depth_max=0.35,      # O'Neil's documented range is 12-35%
     rim_down=0.08,       # right rim may sit this far BELOW the left rim
     rim_up=0.05,         # ...or this far above
     pierce=0.02,         # bars inside the cup may poke above the rim by this
@@ -50,12 +51,14 @@ P = dict(
     round_min=0.30,
     prior_pct=0.25,      # advance required before the base
     prior_look=120,
-    handle_min=4,
+    handle_min=5,        # 1 week minimum
     handle_max=35,
-    handle_depth=0.15,
+    handle_depth=0.12,   # O'Neil's normal range tops out around 12%
+    handle_slope=0.0,    # max % per day drift; a handle must NOT wedge upward
+    handle_vol=1.0,      # handle volume must dry up: at or below the 50d average
     vol_mult=1.4,
     vol_len=50,
-    max_ext=0.05,        # ignore a breakout already this far past the buy point
+    max_ext=0.05,        # never chase more than this far past the buy point
 )
 
 
@@ -132,8 +135,36 @@ def find_cup(df, p=P):
     return None
 
 
+def handle_quality(close, vol, avg_vol, start, end, buy, p=P):
+    """Two O'Neil handle rules we used to ignore.
+
+    slope   - a proper handle drifts DOWN along a falling trendline. One that
+              wedges upward means no shakeout happened, and those fail more.
+    dry_up  - volume must contract through the handle. Heavy volume in a
+              handle is distribution, not a pause.
+
+    `end` excludes the breakout bar itself, whose price and volume both spike.
+    Returns (slope_pct_per_day, volume_vs_average) or (None, None) if the
+    handle is too short to judge.
+    """
+    if end - start < 3:
+        return None, None
+    y = close[start:end]
+    x = np.arange(len(y), dtype=float)
+    slope = float(np.polyfit(x, y, 1)[0]) / buy * 100 if buy else 0.0
+    ref = avg_vol[end - 1]
+    dry = float(vol[start:end].mean()) / ref if ref and not np.isnan(ref) else None
+    return round(slope, 3), (round(dry, 2) if dry is not None else None)
+
+
 def evaluate(df, cup, p=P, breakout_window=5):
-    """Given a cup, work out what the handle has done since the right rim."""
+    """Given a cup, work out what the handle has done since the right rim.
+
+    Returns None when there is nothing actionable - including when a breakout
+    already failed or has run too far to chase. The second element of the
+    tuple form (see `scan`) carries the reason so we can report what was
+    filtered rather than silently dropping it.
+    """
     high = df["High"].to_numpy(float)
     low = df["Low"].to_numpy(float)
     close = df["Close"].to_numpy(float)
@@ -150,7 +181,7 @@ def evaluate(df, cup, p=P, breakout_window=5):
 
     h_slice = slice(ri + 1, n)
     if h_slice.stop <= h_slice.start:
-        return None
+        return None, "no handle yet"
     h_low = float(low[h_slice].min())
     h_depth = (buy - h_low) / buy
     days = last - ri
@@ -170,6 +201,18 @@ def evaluate(df, cup, p=P, breakout_window=5):
         break
 
     px = float(close[last])
+
+    # 7 weeks minimum for the whole base, cup plus handle (O'Neil)
+    if cup["length"] + days < p["base_min"]:
+        return None, "base under 7 weeks"
+
+    h_end = bo if bo is not None else n        # exclude the breakout bar
+    slope, dry = handle_quality(close, vol, avg_vol, ri + 1, h_end, buy, p)
+    if slope is not None and slope > p["handle_slope"]:
+        return None, "handle wedges upward"
+    if dry is not None and dry > p["handle_vol"]:
+        return None, "no volume dry-up in handle"
+
     common = dict(
         Buy_Point=round(buy, 2),
         Last_Price=round(px, 2),
@@ -177,6 +220,8 @@ def evaluate(df, cup, p=P, breakout_window=5):
         Cup_Weeks=round(cup["length"] / 5, 1),
         Handle_Depth_pct=round(h_depth * 100, 1),
         Handle_Days=int(days),
+        Handle_Slope=slope,
+        Handle_Vol=dry,
         Cup_Low=round(cup_low, 2),
         Target=round(buy + (buy - cup_low), 2),
         Vol_x_Avg=round(vol[last] / avg_vol[last], 2) if avg_vol[last] else None,
@@ -186,21 +231,32 @@ def evaluate(df, cup, p=P, breakout_window=5):
     if bo is not None:
         since = last - bo
         if since > breakout_window:
-            return None                                # broke out too long ago
+            return None, "breakout too old"
+        # A breakout that has closed back under the pivot has FAILED. This is
+        # the check that was missing: we used to report the breakout bar
+        # without ever asking where the price sits today.
+        if px < buy:
+            return None, "breakout failed - back below buy point"
+        # And never chase. The 5% limit has to be measured against TODAY's
+        # price, not the breakout bar, or it stops meaning anything after a
+        # couple of days of follow-through.
+        if px > buy * (1 + p["max_ext"]):
+            return None, "extended past the buy point"
         stop = max(h_low, float(close[bo]) * 0.92)
         return dict(Stage="BREAKOUT", Days_Since_Breakout=int(since),
                     Breakout_Price=round(float(close[bo]), 2),
-                    Stop=round(stop, 2), Pct_To_Buy=0.0, **common)
+                    Stop=round(stop, 2),
+                    Pct_To_Buy=round((buy / px - 1) * 100, 2), **common), None
 
     # no breakout yet - is the handle still alive?
     if days > p["handle_max"] or h_low < mid or h_depth > p["handle_depth"]:
-        return None
+        return None, "handle broke down"
     if px > buy * (1 + p["max_ext"]):
-        return None
+        return None, "extended past the buy point"
 
     return dict(Stage="HANDLE FORMING", Days_Since_Breakout=None,
                 Breakout_Price=None, Stop=round(max(h_low, px * 0.92), 2),
-                Pct_To_Buy=round((buy / px - 1) * 100, 2), **common)
+                Pct_To_Buy=round((buy / px - 1) * 100, 2), **common), None
 
 
 def scan(symbols, downloader=None, batch_size=60, pause=1.5, period="2y",
@@ -210,7 +266,7 @@ def scan(symbols, downloader=None, batch_size=60, pause=1.5, period="2y",
         downloader = lambda t: yf.download(t, period=period, interval="1d",
                                            group_by="ticker", auto_adjust=False,
                                            actions=False, progress=False, threads=True)
-    hits, scanned = [], 0
+    hits, scanned, rejected = [], 0, {}
     for start in range(0, len(symbols), batch_size):
         batch = symbols[start:start + batch_size]
         tickers = [s + ".NS" for s in batch]
@@ -234,22 +290,24 @@ def scan(symbols, downloader=None, batch_size=60, pause=1.5, period="2y",
                 cup = find_cup(df)
                 if not cup:
                     continue
-                res = evaluate(df, cup, breakout_window=breakout_window)
+                res, why = evaluate(df, cup, breakout_window=breakout_window)
                 if res:
                     hits.append(dict(Symbol=sym, **res))
+                elif why:
+                    rejected.setdefault(why, []).append(sym)
             except Exception:
                 continue
         done = min(start + batch_size, len(symbols))
         log(f"  {done}/{len(symbols)} scanned - {len(hits)} patterns so far")
         if done < len(symbols):
             time.sleep(pause)
-    return hits, scanned
+    return hits, scanned, rejected
 
 
 COLS = ["Symbol", "Company", "Stage", "RS_Rating", "Last_Price", "Buy_Point",
         "Pct_To_Buy", "Stop", "Target", "Handle_Days", "Handle_Depth_pct",
-        "Cup_Depth_pct", "Cup_Weeks", "Cup_Low", "Vol_x_Avg", "Above_50DMA",
-        "Days_Since_Breakout", "Breakout_Price"]
+        "Handle_Slope", "Handle_Vol", "Cup_Depth_pct", "Cup_Weeks", "Cup_Low",
+        "Vol_x_Avg", "Above_50DMA", "Days_Since_Breakout", "Breakout_Price"]
 
 
 def write_xlsx(df, path):
@@ -312,12 +370,19 @@ def main():
         print(f"MARKET: could not be checked ({exc}) - treat signals with caution\n")
 
     print(f"{datetime.now():%Y-%m-%d %H:%M}  scanning {len(syms)} stocks for cup & handle")
-    hits, scanned = scan(syms, batch_size=args.batch_size, pause=args.pause,
-                         breakout_window=args.days)
+    hits, scanned, rejected = scan(syms, batch_size=args.batch_size,
+                                   pause=args.pause, breakout_window=args.days)
+
+    if rejected:
+        print("\nCups found but filtered out:")
+        for why, syms_ in sorted(rejected.items(), key=lambda kv: -len(kv[1])):
+            shown = ", ".join(syms_[:6]) + ("..." if len(syms_) > 6 else "")
+            print(f"  {len(syms_):3d}  {why:<38} {shown}")
 
     if not hits:
-        print(f"\nScanned {scanned}. No cup-and-handle patterns today.")
-        print("That is a normal result - real bases are not common every day.")
+        print(f"\nScanned {scanned}. No tradeable cup-and-handle setups today.")
+        print("That is a normal result - real bases are not common every day,")
+        print("and they are scarcest when the market itself is under pressure.")
         return
 
     df = pd.DataFrame(hits)
