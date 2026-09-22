@@ -158,6 +158,68 @@ def handle_quality(close, vol, avg_vol, start, end, buy, p=P):
     return round(slope, 3), (round(dry, 2) if dry is not None else None)
 
 
+def base_stage(df, reset_dd=0.30, min_pullback=0.12, min_base=25):
+    """How many bases has this stock built since its last deep correction?
+
+    O'Neil counts bases from the point a stock emerges after a severe decline.
+    The first base off that low is the one that works; by the third and fourth
+    the move is late, everybody can see it, and the failure rate climbs sharply.
+
+    The count here:
+      * resets at the LAST bar that closed 30% or more below its running peak -
+        that decline wipes the slate clean
+      * from there, a base starts when price closes 12%+ off a running high and
+        ends when it closes back above that high
+      * a base only counts if it lasted at least five weeks; shorter dips are
+        noise, not bases
+
+    Returns (stage, in_base_now). Stage 1 means the current base is the first
+    since the correction.
+
+    Caveat worth knowing: with two years of history this is a FLOOR. A stock
+    that has been advancing for three years may really be later-stage than this
+    says, because the earlier bases are off the edge of the data.
+    """
+    high = df["High"].to_numpy(float)
+    close = df["Close"].to_numpy(float)
+    n = len(df)
+    if n < min_base + 10:
+        return None, False
+
+    # Where the count starts. Two steps, and both matter:
+    #   1. find the last bar that closed 30%+ under its running peak, resetting
+    #      the peak each time so a stock that has not yet regained an old high
+    #      does not trip this again on every ordinary pullback
+    #   2. move forward to the actual BOTTOM after that - the low itself is
+    #      where the new advance begins, and counting from anywhere on the way
+    #      down would score the recovery leg as a base of its own
+    trigger, peak = None, high[0]
+    for i in range(n):
+        peak = max(peak, high[i])
+        if peak > 0 and close[i] <= peak * (1 - reset_dd):
+            trigger, peak = i, high[i]
+    if trigger is None:
+        start = 0                       # no deep decline in view - count from the edge
+    else:
+        start = trigger + int(np.argmin(close[trigger:]))
+
+    stage = 1
+    in_base = False
+    run_high = high[start]
+    base_start, base_high = start, high[start]
+    for i in range(start, n):
+        if not in_base:
+            run_high = max(run_high, high[i])
+            if run_high > 0 and close[i] <= run_high * (1 - min_pullback):
+                in_base, base_start, base_high = True, i, run_high
+        elif close[i] > base_high:                  # cleared the top of that base
+            if i - base_start >= min_base:
+                stage += 1
+            in_base = False
+            run_high = high[i]
+    return stage, in_base
+
+
 def oneil_stop(entry, handle_low, max_loss=P["max_loss"]):
     """Where to cut, for a purchase made at `entry`.
 
@@ -226,7 +288,10 @@ def evaluate(df, cup, p=P, breakout_window=5):
     if dry is not None and dry > p["handle_vol"]:
         return None, "no volume dry-up in handle"
 
+    stage, _ = base_stage(df)
+
     common = dict(
+        Base_Stage=stage,
         Buy_Point=round(buy, 2),
         Last_Price=round(px, 2),
         Cup_Depth_pct=round(cup["depth"] * 100, 1),
@@ -324,11 +389,14 @@ def scan(symbols, downloader=None, batch_size=60, pause=1.5, period="2y",
     return hits, scanned, rejected
 
 
-COLS = ["Symbol", "Company", "Stage", "RS_Rating", "Last_Price", "Buy_Point",
+COLS = ["Symbol", "Company", "Stage", "RS_Rating", "Base_Stage",
+        "Earnings_Grade", "EPS_Q_Growth", "Sales_Q_Growth", "EPS_A_Growth", "ROE",
+        "Last_Price", "Buy_Point",
         "Pct_To_Buy", "Stop", "Risk_pct", "Target", "Handle_Days",
         "Handle_Low", "Handle_Depth_pct",
         "Handle_Slope", "Handle_Vol", "Cup_Depth_pct", "Cup_Weeks", "Cup_Low",
-        "Vol_x_Avg", "Above_50DMA", "Days_Since_Breakout", "Breakout_Price"]
+        "Vol_x_Avg", "Above_50DMA", "Days_Since_Breakout", "Breakout_Price",
+        "Earnings_Note"]
 
 
 def write_xlsx(df, path):
@@ -359,6 +427,12 @@ def main():
     ap.add_argument("--days", type=int, default=5, help="report breakouts this recent")
     ap.add_argument("--min-rs", type=int, default=80,
                     help="RS Rating floor for candidates (O'Neil: 80+)")
+    ap.add_argument("--max-stage", type=int, default=0,
+                    help="drop bases later than this stage (0 = flag only, never drop)")
+    ap.add_argument("--no-earnings", action="store_true",
+                    help="skip the CANSLIM C/A lookup for the signals")
+    ap.add_argument("--require-earnings", action="store_true",
+                    help="drop signals whose earnings FAIL O'Neil's C/A thresholds")
     ap.add_argument("--batch-size", type=int, default=60)
     ap.add_argument("--pause", type=float, default=1.5)
     args = ap.parse_args()
@@ -409,6 +483,36 @@ def main():
     df = pd.DataFrame(hits)
     df.insert(1, "Company", df["Symbol"].map(names))
     df.insert(2, "RS_Rating", df["Symbol"].map(rs))
+
+    # Late-stage bases: flagged by default, never dropped, because a 3rd-stage
+    # base in a genuine leader is still tradeable - just smaller and later.
+    if args.max_stage and "Base_Stage" in df.columns:
+        late = df["Base_Stage"].notna() & (df["Base_Stage"] > args.max_stage)
+        if late.any():
+            print(f"\nDropped {int(late.sum())} signal(s) past stage {args.max_stage}: "
+                  + ", ".join(df.loc[late, "Symbol"]))
+            df = df[~late].reset_index(drop=True)
+
+    # O'Neil's C and A. Only the signals, so it is a few lookups, not 2,300.
+    if not args.no_earnings and len(df):
+        print(f"\nChecking earnings for {len(df)} signal(s)...")
+        try:
+            import fundamentals
+            fun = fundamentals.fetch(df["Symbol"].tolist())
+            df = df.merge(fun, on="Symbol", how="left")
+            if args.require_earnings:
+                bad = df["Earnings_Grade"].eq("FAIL")
+                if bad.any():
+                    print("  dropped on earnings: "
+                          + ", ".join(df.loc[bad, "Symbol"]))
+                    df = df[~bad].reset_index(drop=True)
+        except Exception as exc:
+            print(f"  earnings check unavailable ({type(exc).__name__}: {exc})")
+
+    if not len(df):
+        print("\nNothing left after the filters.")
+        return
+
     df = df.sort_values(["Stage", "Pct_To_Buy"]).reset_index(drop=True)
 
     write_xlsx(df, OUT_XLSX)
@@ -426,10 +530,22 @@ def main():
         print(f"  !! {market['verdict']}: {market['advice']}")
     print(f"  wrote {OUT_XLSX}")
     print(f"  wrote {OUT_TV}\n")
-    show = [c for c in ["Symbol", "Stage", "RS_Rating", "Last_Price", "Buy_Point",
-                        "Pct_To_Buy", "Stop", "Target", "Handle_Days",
-                        "Cup_Depth_pct"] if c in df]
+    show = [c for c in ["Symbol", "Stage", "RS_Rating", "Base_Stage",
+                        "Earnings_Grade", "Last_Price", "Buy_Point",
+                        "Pct_To_Buy", "Stop", "Risk_pct", "Target",
+                        "Handle_Days", "Cup_Depth_pct"] if c in df]
     print(df[show].to_string(index=False))
+
+    if "Base_Stage" in df.columns:
+        late = df[df["Base_Stage"].notna() & (df["Base_Stage"] >= 3)]
+        for _, r in late.iterrows():
+            print(f"  !! {r['Symbol']}: stage-{int(r['Base_Stage'])} base - "
+                  "late in the move, these fail more often")
+    if "Earnings_Grade" in df.columns:
+        for _, r in df.iterrows():
+            if r["Earnings_Grade"] in ("FAIL", "NO DATA", "THIN"):
+                print(f"  ?? {r['Symbol']}: earnings {r['Earnings_Grade']} - "
+                      f"{r['Earnings_Note']}")
 
 
 if __name__ == "__main__":

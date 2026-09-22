@@ -33,7 +33,11 @@ jobs:
       - name: Check the market's health
         run: python market_filter.py
 
-      - name: Look for cup-and-handle bases
+      # Also counts the base stage, and checks O'Neil's C and A (quarterly and
+      # annual earnings) for the handful of names that make it through. Late
+      # bases and weak earnings are flagged on the dashboard, not dropped -
+      # free fundamentals for Indian small caps are too patchy to filter on.
+      - name: Look for cup-and-handle bases, then check their earnings
         run: python find_patterns.py --days 5
 
       - name: Build the dashboard data

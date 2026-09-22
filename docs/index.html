@@ -10,7 +10,7 @@
   img{max-width:100%}
   [hidden]{display:none!important}
 </style>
-<meta name="build" content="2026-09-22-2">
+<meta name="build" content="2026-09-22-3">
   <title>NSE Base Scanner</title>
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Archivo:wght@500;600;700&family=IBM+Plex+Mono:wght@400;500;600&family=IBM+Plex+Sans:wght@400;500;600&display=swap">
@@ -249,6 +249,24 @@
   .rs{font-family:var(--mono); font-weight:600}
   .rs.hi{color:var(--pos)} .rs.lo{color:var(--faint)}
   .warnrisk{color:var(--neg); font-weight:600}
+  /* base stage + earnings grade */
+  .bs{
+    font-family:var(--mono); font-size:11.5px; font-weight:600; display:inline-block;
+    min-width:20px; text-align:center; padding:2px 6px; border-radius:6px;
+    background:var(--surface-2); color:var(--muted); border:1px solid var(--line-2);
+  }
+  .bs.mid{color:var(--warn); border-color:color-mix(in srgb,var(--warn) 35%,transparent)}
+  .bs.late{color:var(--neg); border-color:color-mix(in srgb,var(--neg) 40%,transparent);
+           background:color-mix(in srgb,var(--neg) 9%,var(--surface))}
+  .eg{
+    font-family:var(--sans); font-size:10.5px; font-weight:600; letter-spacing:.02em;
+    padding:2px 7px; border-radius:20px; white-space:nowrap; cursor:help;
+    background:var(--surface-2); color:var(--muted);
+  }
+  .eg.pass{background:color-mix(in srgb,var(--pos) 14%,var(--surface)); color:var(--pos)}
+  .eg.thin{background:color-mix(in srgb,var(--warn) 14%,var(--surface)); color:var(--warn)}
+  .eg.fail{background:color-mix(in srgb,var(--neg) 14%,var(--surface)); color:var(--neg)}
+  .eg.none{color:var(--faint)}
   .empty{padding:44px 20px; text-align:center; color:var(--muted)}
   .empty strong{display:block; font-family:var(--display); font-size:15px; color:var(--ink); margin-bottom:5px}
 
@@ -337,7 +355,7 @@ let view = "watch";
 let sort = {key:"sc", dir:-1};
 const VOL_STEPS = [0,10000,25000,50000,100000,200000,300000,500000,750000,1e6,1.5e6,2e6,3e6,5e6,7.5e6,1e7,1.5e7,2e7,3e7,5e7,1e8];
 
-const BUILD = "2026-09-22-2";
+const BUILD = "2026-09-22-3";
 const $ = id => document.getElementById(id);
 
 // ---------- formatting ----------
@@ -399,6 +417,9 @@ function loadLive(recs){
 function loadSignals(recs){
   sigs = recs.map(r => ({
     s:r["Symbol"], n:r["Company"], stage:r["Stage"],
+    bs:num(r["Base_Stage"]), eg:r["Earnings_Grade"], en:r["Earnings_Note"],
+    epsq:num(r["EPS_Q_Growth"]), salesq:num(r["Sales_Q_Growth"]),
+    epsa:num(r["EPS_A_Growth"]), roe:num(r["ROE"]),
     p:num(r["Last_Price"]), buy:num(r["Buy_Point"]), toBuy:num(r["Pct_To_Buy"]),
     stop:num(r["Stop"]), risk:num(r["Risk_pct"]), tgt:num(r["Target"]),
     hd:num(r["Handle_Days"]), hlow:num(r["Handle_Low"]),
@@ -447,6 +468,8 @@ const COLS_SIG = [
   {k:"s",     t:"Symbol"},
   {k:"stage", t:"Stage"},
   {k:"rs",    t:"RS Rating"},
+  {k:"bs",    t:"Base"},
+  {k:"eg",    t:"Earnings"},
   {k:"p",     t:"Price"},
   {k:"buy",   t:"Buy Point"},
   {k:"toBuy", t:"% To Buy"},
@@ -486,6 +509,23 @@ function cell(r, k){
       return '<span class="' + (loose ? "warnrisk" : "") + '" title="' +
         (loose ? "Loose handle - the handle low (" + inr(r.hlow) + ") is more than 8% under the buy point, so the 7-8% rule sets this stop, not the chart."
                : "Handle low, which is tighter than the 8% rule.") + '">−' + r.risk.toFixed(1) + "%</span>";
+    }
+    case "bs": {
+      // O'Neil: the first base off a correction is the one that works. By the
+      // third and fourth the move is late and the failure rate climbs.
+      if(r.bs == null) return "–";
+      const c = r.bs >= 4 ? "late" : r.bs === 3 ? "mid" : "";
+      const why = r.bs >= 3
+        ? "Stage " + r.bs + " base - late in the move, these fail more often."
+        : "Stage " + r.bs + " base since the last deep correction.";
+      return '<span class="bs ' + c + '" title="' + why + '">' + r.bs + "</span>";
+    }
+    case "eg": {
+      if(!r.eg) return "–";
+      const map = {"PASS":"pass","THIN":"thin","FAIL":"fail","NO DATA":"none"};
+      const label = r.eg === "NO DATA" ? "NO DATA" : r.eg;
+      return '<span class="eg ' + (map[r.eg] || "none") + '" title="' +
+             esc(r.en || r.eg) + '">' + esc(label) + "</span>";
     }
     case "hdep": case "cdep": return r[k] == null ? "–" : r[k].toFixed(1) + "%";
     default: return r[k] == null ? "–" : r[k];

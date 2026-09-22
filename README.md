@@ -16,7 +16,7 @@ Runs entirely on GitHub's free tier. Nothing to install, no server, no cost.
 | 1. Fetch prices, 20W/52W high-low, volume, 50 & 200 DMA | `update_nse_data.py` | `EQUITY_L_live.csv` |
 | 2. Keep RS 80+ leaders above both MAs, near their highs | `screen_stocks.py` | shortlist |
 | 3. Judge market health from the Nifty 50 | `market_filter.py` | `market.json` |
-| 4. Find cup-and-handle bases and breakouts | `find_patterns.py` | `cup_handle_signals.csv` |
+| 4. Find cup-and-handle bases, count base stage, check earnings | `find_patterns.py` + `fundamentals.py` | `cup_handle_signals.csv` |
 | 5. Pack it for the dashboard | `build_site.py` | `docs/data.json` |
 
 The dashboard is `docs/index.html`. Click any symbol to open its daily chart in
@@ -77,7 +77,23 @@ After that it runs itself every weekday at 18:30 IST.
 
 ---
 
-## Two O'Neil rules this now enforces
+## What of CANSLIM is here
+
+| | Rule | Status |
+|---|---|---|
+| **C** | Current quarterly EPS +25%, sales +20% | `fundamentals.py`, on the signals — **flagged, not filtered** |
+| **A** | Annual EPS +25%/yr, ROE 17%+ | same |
+| **N** | New high out of a sound base | the cup-and-handle detector |
+| **S** | Supply and demand — volume | breakout volume 1.4×, volume dry-up in the handle |
+| **L** | Leader, not laggard | RS Rating 80+ |
+| **I** | Institutional sponsorship | **not possible** on free NSE data |
+| **M** | Market direction | `market_filter.py` |
+
+Base stage counting sits alongside these: the first base after a deep
+correction is the one that works, and a 3rd or 4th stage base is flagged as
+higher risk.
+
+## The O'Neil rules this enforces
 
 **RS Rating (the "L" in CANSLIM).** Each stock's weighted 3/6/9/12-month price
 performance is percentile-ranked 1-99 against the whole 2,300-stock universe.
@@ -108,6 +124,40 @@ breakout close once it has broken out. `Risk` shows what that stop costs you,
 and turns red when the handle low is below it, which is the tool telling you
 the base is loose and the 8% rule is carrying the stop rather than the chart.
 
+**Base stage (the Base column).** O'Neil counts bases from the point a stock
+emerges after a severe decline. The first base off that low is the one that
+works; by the third and fourth everybody can see the move and the failure rate
+climbs. The count resets at the last bar that closed 30%+ under its running
+peak, then steps forward to the actual bottom; from there a base starts when
+price closes 12% off a running high and ends when it closes back above that
+high, and only counts if it lasted five weeks or more. Stage 3 is amber,
+stage 4+ is red. With two years of history **the number is a floor** — a stock
+that has been advancing for three years may really be later-stage than this
+says, because the earlier bases are off the edge of the data. `--max-stage 3`
+drops the late ones instead of flagging them.
+
+**Earnings, the C and the A (the Earnings column).** This is the half of
+O'Neil's method the chart cannot tell you: a cup-and-handle on a company whose
+earnings are shrinking is a trap. `fundamentals.py` pulls quarterly and annual
+statements for the signals only — a handful of lookups, not 2,300 — and grades
+them:
+
+| Grade | Means |
+|---|---|
+| PASS | three or more of the four tests are visible and all of them clear |
+| FAIL | something visible falls short; the note says what and by how much |
+| THIN | what's visible passes, but there's too little of it to trust |
+| NO DATA | nothing usable came back — **look it up yourself** |
+
+Hover the grade for the numbers behind it. Be aware of the coverage gaps:
+Yahoo's free fundamentals are reasonable for large NSE names and patchy for
+small caps, sometimes a quarter stale, and its quarter alignment for Indian
+companies is not always right — so a quarter is only compared with a column
+roughly four quarters earlier, and the comparison is refused when the spacing
+looks wrong. A loss that turned into a profit is reported as "loss to profit"
+rather than an invented percentage. Nothing is dropped for missing data;
+`--require-earnings` turns FAIL into a filter if you want it to be one.
+
 ## Changing the rules
 
 | What | Where |
@@ -115,6 +165,8 @@ the base is loose and the 8% rule is carrying the stop rather than the chart.
 | Screening filters (distance from high, min volume, min price) | `screen_stocks.py`, the `screen()` defaults |
 | Cup-and-handle rules (depth, length, handle, volume) | `find_patterns.py`, the `P` dictionary at the top |
 | RS floor | `--min-rs` on `screen_stocks.py` and `find_patterns.py` |
+| Earnings thresholds | `fundamentals.py`, the constants at the top |
+| Base stage limit | `--max-stage` on `find_patterns.py` (0 = flag only) |
 | Market thresholds (distribution days) | `market_filter.py`, the constants at the top |
 | Run time | `.github/workflows/daily.yml` — cron is in **UTC**, so 13:00 UTC = 18:30 IST |
 

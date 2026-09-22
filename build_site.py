@@ -29,6 +29,9 @@ SCREEN_MAP = {
 }
 SIG_MAP = {
     "Symbol": "s", "Company": "n", "Stage": "stage", "RS_Rating": "rs",
+    "Base_Stage": "bs", "Earnings_Grade": "eg", "Earnings_Note": "en",
+    "EPS_Q_Growth": "epsq", "Sales_Q_Growth": "salesq",
+    "EPS_A_Growth": "epsa", "ROE": "roe",
     "Last_Price": "p",
     "Buy_Point": "buy", "Pct_To_Buy": "toBuy", "Stop": "stop",
     "Risk_pct": "risk", "Target": "tgt",
