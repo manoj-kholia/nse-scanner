@@ -10,7 +10,8 @@
   img{max-width:100%}
   [hidden]{display:none!important}
 </style>
-<title>NSE Base Scanner</title>
+<meta name="build" content="2026-09-22-2">
+  <title>NSE Base Scanner</title>
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Archivo:wght@500;600;700&family=IBM+Plex+Mono:wght@400;500;600&family=IBM+Plex+Sans:wght@400;500;600&display=swap">
 <style>
@@ -336,6 +337,7 @@ let view = "watch";
 let sort = {key:"sc", dir:-1};
 const VOL_STEPS = [0,10000,25000,50000,100000,200000,300000,500000,750000,1e6,1.5e6,2e6,3e6,5e6,7.5e6,1e7,1.5e7,2e7,3e7,5e7,1e8];
 
+const BUILD = "2026-09-22-2";
 const $ = id => document.getElementById(id);
 
 // ---------- formatting ----------
@@ -694,6 +696,30 @@ async function boot(){
   render();
 }
 boot();
+
+// ---------- keep the page shell fresh ----------
+// GitHub Pages serves index.html with a ~10 minute cache, so reloading right
+// after a deploy can still hand you the previous version of this file. Ask the
+// server what it has; if this copy is stale, swap to the new one once.
+async function freshShell(){
+  if(!/github\.io$/i.test(location.hostname)) return;   // only on the published site
+  const TAG = 'name="build" content=';
+  try{
+    const res = await fetch(location.pathname + "?v=" + Date.now(), {cache:"no-store"});
+    if(!res.ok) return;
+    const txt = await res.text();
+    const i = txt.indexOf(TAG);                    // the meta tag, which sits above this script
+    if(i < 0) return;
+    const server = txt.slice(i + TAG.length + 1).split('"')[0];
+    if(!server || server === BUILD) return;
+    let tried = null;
+    try{ tried = sessionStorage.getItem("shell"); }catch{}
+    if(tried === server) return;                   // already swapped once - never loop
+    try{ sessionStorage.setItem("shell", server); }catch{}
+    location.replace(location.pathname + "?v=" + encodeURIComponent(server));
+  }catch{}
+}
+freshShell();
 </script>
 </body>
 </html>
