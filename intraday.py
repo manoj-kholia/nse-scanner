@@ -121,20 +121,33 @@ def _daily_atr(sessions, n=14):
     return float(atr) if np.isfinite(atr) else None
 
 
-def opening_stats(df, p=P):
+def opening_stats(df, p=P, why=None):
     """Today's opening behaviour against its own recent history.
 
     Returns None when there is not enough history to make the comparison
     meaningful - a blank is better than a number built on three sessions.
+    Pass a dict as `why` to find out WHICH check rejected it; lumping every
+    failure under one reason is how a silent empty download looks exactly like
+    a genuinely quiet market.
     """
-    sess = _sessions(df)
-    if len(sess) < 4:
+    def no(reason):
+        if why is not None:
+            why["reason"] = reason
         return None
+
+    if df is None or not len(df):
+        return no("no bars returned")
+
+    sess = _sessions(df)
+    if not sess:
+        return no("bars returned but all empty")
+    if len(sess) < 4:
+        return no(f"only {len(sess)} session(s) of intraday history")
 
     today_date, today = sess[-1]
     prior = sess[:-1][-p["lookback"]:]
     if len(prior) < 3:
-        return None
+        return no("fewer than 3 prior sessions")
 
     def opening(g):
         """The first `open_bars` bars of a session, if it really opened on time."""
@@ -145,21 +158,21 @@ def opening_stats(df, p=P):
 
     o_today = opening(today)
     if o_today is None or o_today.empty:
-        return None
+        return no(f"today's data starts at {today.index[0]:%H:%M}, not the open")
 
     base = [opening(g) for _, g in prior]
     base_vols = [float(b["Volume"].sum()) for b in base if b is not None and len(b)]
     if len(base_vols) < 3:
-        return None
+        return no("too few past sessions have an opening bar")
     median_open_vol = float(np.median(base_vols))
     if median_open_vol <= 0:
-        return None
+        return no("no opening volume in the history to compare against")
 
     open_vol = float(o_today["Volume"].sum())
     prev_close = float(prior[-1][1]["Close"].iloc[-1])
     day_open = float(o_today["Open"].iloc[0])
     if prev_close <= 0 or day_open <= 0:
-        return None
+        return no("bad price data")
 
     atr = _daily_atr(prior)
     or_hi, or_lo = float(o_today["High"].max()), float(o_today["Low"].min())
@@ -217,6 +230,14 @@ def score(row, p=P):
 
 # --------------------------------------------------------------------- scan --
 def default_downloader(period="1mo", interval="5m"):
+    """Yahoo intraday.
+
+    Intraday is much fussier than daily: large batched requests frequently come
+    back with the column structure present and every value NaN, which looks
+    exactly like a quiet market unless you check. So batches stay small and a
+    batch that returns nothing is retried one ticker at a time before it is
+    written off.
+    """
     import yfinance as yf
 
     def dl(tickers):
@@ -226,7 +247,22 @@ def default_downloader(period="1mo", interval="5m"):
     return dl
 
 
-def scan(symbols, downloader=None, batch_size=40, pause=1.5, p=P, log=print):
+def _pick(raw, tk):
+    """One ticker's frame out of whatever shape the download returned."""
+    if raw is None or not len(raw):
+        return None
+    if isinstance(raw.columns, pd.MultiIndex):
+        if tk not in raw.columns.get_level_values(0):
+            return None
+        return raw[tk]
+    return raw
+
+
+def _usable(df):
+    return df is not None and len(df) and df["Close"].notna().any()
+
+
+def scan(symbols, downloader=None, batch_size=10, pause=1.0, p=P, log=print):
     """Opening stats for a list of symbols. Returns (rows, scanned, skipped)."""
     downloader = downloader or default_downloader()
     rows, scanned, skipped = [], 0, {}
@@ -238,22 +274,29 @@ def scan(symbols, downloader=None, batch_size=40, pause=1.5, p=P, log=print):
             raw = downloader(tickers)
         except Exception as exc:
             log(f"  batch failed: {type(exc).__name__}: {exc}")
-            skipped.setdefault("download failed", []).extend(batch)
-            continue
+            raw = None
 
-        for sym, tk in zip(batch, tickers):
+        frames = {s: _pick(raw, tk) for s, tk in zip(batch, tickers)}
+
+        # A batch that came back empty is usually the request, not the market.
+        missing = [s for s, f in frames.items() if not _usable(f)]
+        if missing and len(missing) == len(batch):
+            log(f"    batch returned nothing - retrying {len(missing)} one at a time")
+            for s in missing:
+                try:
+                    frames[s] = _pick(downloader([s + ".NS"]), s + ".NS")
+                except Exception:
+                    frames[s] = None
+                time.sleep(0.3)
+
+        for sym in batch:
+            df = frames.get(sym)
             try:
-                if isinstance(raw.columns, pd.MultiIndex):
-                    if tk not in raw.columns.get_level_values(0):
-                        skipped.setdefault("no data returned", []).append(sym)
-                        continue
-                    df = raw[tk]
-                else:
-                    df = raw
                 scanned += 1
-                st = opening_stats(df, p)
+                why = {}
+                st = opening_stats(df, p, why) if _usable(df) else None
                 if st is None:
-                    skipped.setdefault("not enough session history", []).append(sym)
+                    skipped.setdefault(why.get("reason", "no data returned"), []).append(sym)
                     continue
                 st["Symbol"] = sym
                 st.update(add_trade_plan(st, p))
@@ -298,8 +341,8 @@ def main():
     ap.add_argument("--min-gap", type=float, default=P["min_gap"])
     ap.add_argument("--position", type=float, default=P["position"],
                     help="position size in rupees, for the break-even column")
-    ap.add_argument("--batch-size", type=int, default=40)
-    ap.add_argument("--pause", type=float, default=1.5)
+    ap.add_argument("--batch-size", type=int, default=10)
+    ap.add_argument("--pause", type=float, default=1.0)
     args = ap.parse_args()
 
     if not os.path.exists(args.source):
@@ -326,9 +369,20 @@ def main():
             print(f"  {len(syms):3d}  {why:<32} {shown}")
 
     if picks.empty:
-        print(f"\nFetched {scanned}. Nothing in play today - no stock opened with "
-              f"{p['min_rvol']}x its normal volume on a {p['min_gap']}%+ gap.")
-        print("That is a normal result. A quiet open is not a reason to trade.")
+        # Always leave the file behind, even empty. A missing file and an empty
+        # one mean very different things, and the one that broke this on the
+        # first run was a pathspec that did not exist.
+        pd.DataFrame(columns=COLS).to_csv(OUT_CSV, index=False)
+        open(OUT_TV, "w").close()
+        got = len(rows)
+        print(f"\nFetched {scanned}, {got} with usable opening data. Nothing in play - "
+              f"no stock opened with {p['min_rvol']}x its normal volume on a "
+              f"{p['min_gap']}%+ gap.")
+        if got == 0:
+            print("  NOTE: zero usable rows means the DATA failed, not the market. "
+                  "Check the skip reasons above.")
+        else:
+            print("  That is a normal result. A quiet open is not a reason to trade.")
         return
 
     picks.insert(1, "Company", picks["Symbol"].map(names))
