@@ -3,16 +3,20 @@
  "verdict": "CORRECTION",
  "buy_breakouts": false,
  "advice": "Do not buy breakouts. O'Neil's rule: most stocks follow the market, and breakouts bought in a correction fail. Watch and wait.",
- "last": 23303.95,
- "day_change_pct": -0.47,
+ "last": 23329.0,
+ "day_change_pct": -0.36,
  "above_50dma": false,
  "above_200dma": false,
  "rising_50dma": false,
- "sma50": 24045.01,
- "sma200": 24465.76,
+ "sma50": 24045.51,
+ "sma200": 24465.89,
  "distribution_days": 9,
  "distribution_window": 25,
  "distribution_detail": [
+  {
+   "date": "2026-08-18",
+   "pct": -0.55
+  },
   {
    "date": "2026-08-19",
    "pct": -0.32
@@ -46,6 +50,6 @@
    "pct": -1.19
   }
  ],
- "pct_off_52w_high": -11.64,
- "checked": "22 Sep 2026, 14:09 IST"
+ "pct_off_52w_high": -11.54,
+ "checked": "22 Sep 2026, 15:31 IST"
 }
