@@ -34,6 +34,7 @@ paper-trade, and read the break-even column before you believe any of it.
 """
 
 import os
+import json
 import time
 import argparse
 from datetime import datetime
@@ -47,6 +48,7 @@ HERE = os.path.dirname(os.path.abspath(__file__))
 LIVE = os.path.join(HERE, "EQUITY_L_live.csv")
 OUT_CSV = os.path.join(HERE, "stocks_in_play.csv")
 OUT_TV = os.path.join(HERE, "intraday_watchlist.txt")
+OUT_STATUS = os.path.join(HERE, "intraday_status.json")
 
 IST = "Asia/Kolkata"
 SESSION_OPEN = "09:15"
@@ -325,6 +327,40 @@ def in_play(rows, p=P):
     return d.sort_values("Score", ascending=False).head(p["top"]).reset_index(drop=True)
 
 
+def write_status(scanned, usable, skipped, kept):
+    """Say out loud whether the DATA worked, separately from whether the market
+    was interesting. An empty screen and a broken feed look identical on a
+    dashboard, and only one of them means "nothing to do today".
+    """
+    reasons = {k: len(v) for k, v in skipped.items()}
+    top = max(reasons, key=reasons.get) if reasons else None
+
+    if usable == 0 and scanned:
+        ok, headline = False, "No usable intraday data"
+        if top and "opening volume" in top:
+            detail = ("The free Yahoo feed returned prices for these stocks but "
+                      "NO intraday volume - every opening bar came back at zero. "
+                      "Relative volume is the whole basis of this screen, so it "
+                      "cannot run on this data source. Intraday volume for NSE "
+                      "needs a broker API (Kite Connect, Dhan, Fyers) or a paid "
+                      "vendor. This is not a quiet market - it is a missing feed.")
+        else:
+            detail = (f"All {scanned} symbols were rejected: {top}. "
+                      "This is a data problem, not a market reading.")
+    else:
+        ok, headline = True, f"{kept} in play"
+        detail = (f"{usable} of {scanned} symbols had usable opening data."
+                  if usable < scanned else f"All {scanned} symbols returned data.")
+
+    status = dict(ok=ok, headline=headline, detail=detail,
+                  scanned=int(scanned), usable=int(usable), kept=int(kept),
+                  reasons=reasons,
+                  checked=datetime.now().strftime("%d %b %Y, %H:%M"))
+    with open(OUT_STATUS, "w") as fh:
+        json.dump(status, fh, indent=1)
+    return status
+
+
 COLS = ["Symbol", "Company", "Session", "Score", "RVol", "Gap_pct", "ATR_pct",
         "Prev_Close", "Open", "OR_High", "OR_Low", "OR_Range_pct",
         "Long_Trigger", "Long_Stop", "Short_Trigger", "Short_Stop",
@@ -368,21 +404,17 @@ def main():
             shown = ", ".join(syms[:6]) + ("..." if len(syms) > 6 else "")
             print(f"  {len(syms):3d}  {why:<32} {shown}")
 
+    status = write_status(scanned, len(rows), skipped, len(picks))
+
     if picks.empty:
         # Always leave the file behind, even empty. A missing file and an empty
         # one mean very different things, and the one that broke this on the
         # first run was a pathspec that did not exist.
         pd.DataFrame(columns=COLS).to_csv(OUT_CSV, index=False)
         open(OUT_TV, "w").close()
-        got = len(rows)
-        print(f"\nFetched {scanned}, {got} with usable opening data. Nothing in play - "
-              f"no stock opened with {p['min_rvol']}x its normal volume on a "
-              f"{p['min_gap']}%+ gap.")
-        if got == 0:
-            print("  NOTE: zero usable rows means the DATA failed, not the market. "
-                  "Check the skip reasons above.")
-        else:
-            print("  That is a normal result. A quiet open is not a reason to trade.")
+        print(f"\n{status['headline']}: {status['detail']}")
+        if status["ok"]:
+            print("  A quiet open is not a reason to trade.")
         return
 
     picks.insert(1, "Company", picks["Symbol"].map(names))

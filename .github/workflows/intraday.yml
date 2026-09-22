@@ -49,6 +49,6 @@ jobs:
           # atomic: if ONE of them does not exist it stages nothing at all,
           # which is how the first run silently committed no results.
           git add -A docs || true
-          git add stocks_in_play.csv intraday_watchlist.txt 2>/dev/null || true
+          git add stocks_in_play.csv intraday_watchlist.txt intraday_status.json 2>/dev/null || true
           git diff --staged --quiet || git commit -m "In play $(TZ=Asia/Kolkata date +'%Y-%m-%d %H:%M IST')"
           git push

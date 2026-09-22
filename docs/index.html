@@ -10,7 +10,7 @@
   img{max-width:100%}
   [hidden]{display:none!important}
 </style>
-<meta name="build" content="2026-09-22-5">
+<meta name="build" content="2026-09-22-6">
   <title>NSE Base Scanner</title>
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Archivo:wght@500;600;700&family=IBM+Plex+Mono:wght@400;500;600&family=IBM+Plex+Sans:wght@400;500;600&display=swap">
@@ -257,6 +257,13 @@
     border-left:3px solid var(--warn);
   }
   .playnote strong{color:var(--ink)}
+  .playstatus{
+    margin-top:12px; padding:12px 15px; border-radius:12px; font-size:12.5px;
+    line-height:1.6; background:var(--surface); border:1px solid var(--line);
+    border-left:3px solid var(--neg); color:var(--muted);
+  }
+  .playstatus.ok{border-left-color:var(--pos)}
+  .playstatus b{color:var(--ink); display:block; margin-bottom:2px}
   .rvol{font-family:var(--mono); font-weight:600; font-variant-numeric:tabular-nums}
   .rvol.hot{color:var(--accent)}
   .mono{font-family:var(--mono); font-variant-numeric:tabular-nums}
@@ -328,6 +335,7 @@
     paid costs worth an extra 57% of their losses &mdash; which is why every row carries its
     own break-even. Paper-trade it first.
   </div>
+  <div id="playStatus" class="playstatus" hidden></div>
 
   <div class="tiles" id="tiles"></div>
 
@@ -382,11 +390,12 @@ let rows = SAMPLE.slice();     // screened stocks
 let sigs = [];                 // cup & handle signals
 let play = [];                 // this morning's stocks in play (intraday)
 let playNote = "";
+let playStatus = null;
 let view = "watch";
 let sort = {key:"sc", dir:-1};
 const VOL_STEPS = [0,10000,25000,50000,100000,200000,300000,500000,750000,1e6,1.5e6,2e6,3e6,5e6,7.5e6,1e7,1.5e7,2e7,3e7,5e7,1e8];
 
-const BUILD = "2026-09-22-5";
+const BUILD = "2026-09-22-6";
 const $ = id => document.getElementById(id);
 
 // ---------- formatting ----------
@@ -621,12 +630,20 @@ function render(){
     e.innerHTML = view === "sig"
       ? "<strong>No cup &amp; handle patterns loaded</strong>Run <code>python3 find_patterns.py</code>, then drop <code>cup_handle_signals.csv</code> here. No signals on a given day is normal &mdash; real bases are not common."
       : view === "play"
-      ? "<strong>Nothing in play</strong>No stock opened on abnormal volume with a real gap. A quiet open is not a reason to trade &mdash; this runs at 09:20 IST each weekday."
+      ? (playStatus && !playStatus.ok
+          ? "<strong>The data failed, not the market</strong>See the note above &mdash; this is not a reading of today's open."
+          : "<strong>Nothing in play</strong>No stock opened on abnormal volume with a real gap. A quiet open is not a reason to trade &mdash; this runs at 09:20 IST each weekday.")
       : "<strong>Nothing matches these filters</strong>Widen the distance from the 20-week high, or lower the volume floor.";
   } else e.hidden = true;
 
   $("filters").hidden = (view === "sig" || view === "play");
   $("playNote").hidden = (view !== "play");
+  const ps = $("playStatus");
+  if(view === "play" && playStatus){
+    ps.hidden = false;
+    ps.className = "playstatus" + (playStatus.ok ? " ok" : "");
+    ps.innerHTML = "<b>" + esc(playStatus.headline) + "</b>" + esc(playStatus.detail || "");
+  } else ps.hidden = true;
   $("c-play").textContent = play.length ? "(" + play.length + ")" : "";
   $("c-watch").textContent = rows.length ? "(" + rows.length + ")" : "";
   $("c-near").textContent  = "(" + rows.filter(r => (r.fh ?? -999) >= -5).length + ")";
@@ -839,6 +856,7 @@ async function boot(){
       const p = await r2.json();
       if(Array.isArray(p.inPlay)) play = p.inPlay;
       if(p.note) playNote = p.note;
+      if(p.status) playStatus = p.status;
     }
   }catch(e){}
   render();

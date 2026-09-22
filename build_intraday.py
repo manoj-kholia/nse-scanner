@@ -14,6 +14,7 @@ import pandas as pd
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 SRC = os.path.join(HERE, "stocks_in_play.csv")
+STATUS = os.path.join(HERE, "intraday_status.json")
 DOCS = os.path.join(HERE, "docs")
 OUT = os.path.join(DOCS, "intraday.json")
 
@@ -53,8 +54,19 @@ def main():
         except Exception:
             rows = []
 
+    # Whether the DATA worked is a different question from whether anything
+    # was in play, and the dashboard must not conflate the two.
+    status = None
+    if os.path.exists(STATUS):
+        try:
+            with open(STATUS) as fh:
+                status = json.load(fh)
+        except Exception:
+            status = None
+
     payload = {
         "built": datetime.now(IST).strftime("%d %b %Y, %H:%M IST"),
+        "status": status,
         "inPlay": rows,
         # shown on the tab so the caveats travel with the numbers
         "note": ("Selection only, not a backtested system. Free intraday data "
@@ -63,7 +75,8 @@ def main():
     }
     with open(OUT, "w") as fh:
         json.dump(payload, fh, separators=(",", ":"))
-    print(f"wrote {OUT}  ({len(rows)} in play)")
+    print(f"wrote {OUT}  ({len(rows)} in play"
+          + (f", data {'ok' if status.get('ok') else 'FAILED'}" if status else "") + ")")
 
 
 if __name__ == "__main__":
