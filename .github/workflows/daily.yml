@@ -1,0 +1,45 @@
+name: Daily NSE scan
+
+on:
+  schedule:
+    # 13:00 UTC = 18:30 IST, Monday-Friday (after the market closes)
+    - cron: "0 13 * * 1-5"
+  workflow_dispatch:        # lets you run it by hand from the Actions tab
+
+permissions:
+  contents: write
+
+jobs:
+  scan:
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: pip
+
+      - name: Install dependencies
+        run: pip install -r requirements.txt
+
+      - name: Fetch prices for every NSE stock
+        run: python update_nse_data.py --pause 2
+
+      - name: Screen for stocks in an uptrend near their highs
+        run: python screen_stocks.py
+
+      - name: Look for cup-and-handle bases
+        run: python find_patterns.py --days 5
+
+      - name: Build the dashboard data
+        run: python build_site.py
+
+      - name: Commit the results
+        run: |
+          git config user.name  "nse-scanner"
+          git config user.email "actions@users.noreply.github.com"
+          git add -A docs EQUITY_L_live.csv cup_handle_signals.csv update_log.txt 2>/dev/null || true
+          git diff --staged --quiet || git commit -m "Scan $(TZ=Asia/Kolkata date +'%Y-%m-%d %H:%M IST')"
+          git push
