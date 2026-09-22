@@ -156,20 +156,98 @@
   .pill.brk{background:var(--pos); color:#fff}
   /* ---- market banner ---- */
   .market{
-    margin-top:16px; border:1px solid var(--line); border-left-width:4px;
-    border-radius:10px; background:var(--surface); padding:12px 16px;
-    display:flex; gap:14px; align-items:baseline; flex-wrap:wrap;
+    --mk:var(--muted); --mk-tint:var(--surface-2); --mk-ring:var(--line);
+    margin-top:16px; border:1px solid var(--line); border-radius:14px;
+    background:var(--surface); box-shadow:var(--shadow); overflow:hidden;
   }
-  .market.ok{border-left-color:var(--pos)}
-  .market.warn{border-left-color:var(--warn)}
-  .market.bad{border-left-color:var(--neg)}
-  .market .verdict{font-family:var(--display); font-weight:700; font-size:14px; letter-spacing:-.01em}
-  .market.ok .verdict{color:var(--pos)} .market.warn .verdict{color:var(--warn)} .market.bad .verdict{color:var(--neg)}
-  .market .lvl{font-family:var(--mono); font-size:12.5px; color:var(--muted); font-variant-numeric:tabular-nums}
-  .market .note{font-size:12.5px; color:var(--muted); flex:1 1 260px; min-width:0}
+  .market.ok, .market.warn, .market.bad{
+    --mk-tint:color-mix(in srgb, var(--mk) 8%, var(--surface));
+    --mk-ring:color-mix(in srgb, var(--mk) 26%, transparent);
+  }
+  .market.ok{--mk:var(--pos)} .market.warn{--mk:var(--warn)} .market.bad{--mk:var(--neg)}
+
+  /* headline strip: the verdict on the left, the index quote on the right */
+  .mk-top{
+    display:flex; flex-wrap:wrap; gap:10px 20px; align-items:center; justify-content:space-between;
+    padding:13px 16px; background:var(--mk-tint); border-bottom:1px solid var(--line);
+  }
+  .mk-badge{
+    display:inline-flex; align-items:center; gap:9px; color:var(--mk);
+    font-family:var(--display); font-weight:700; font-size:13px;
+    letter-spacing:.05em; text-transform:uppercase;
+  }
+  .mk-dot{
+    width:9px; height:9px; border-radius:50%; background:var(--mk); flex:none;
+    box-shadow:0 0 0 4px var(--mk-ring);
+  }
+  .mk-quote{display:flex; align-items:baseline; gap:9px; font-variant-numeric:tabular-nums; min-width:0}
+  .mk-name{
+    font-size:10.5px; font-weight:600; letter-spacing:.07em; text-transform:uppercase;
+    color:var(--faint); white-space:nowrap;
+  }
+  .mk-px{font-family:var(--mono); font-size:18px; font-weight:600; letter-spacing:-.02em}
+  .mk-chg{font-family:var(--mono); font-size:13px; font-weight:600}
+
+  .mk-body{padding:14px 16px 15px}
+  .mk-advice{margin:0 0 14px; font-size:13px; line-height:1.55; color:var(--ink); max-width:76ch}
+
+  .mk-grid{display:grid; gap:16px 26px; grid-template-columns:minmax(0,1fr) minmax(0,1.15fr)}
+  @media (max-width:780px){.mk-grid{grid-template-columns:1fr; gap:18px}}
+
+  .mk-lab{font-size:10.5px; font-weight:600; letter-spacing:.07em; text-transform:uppercase; color:var(--faint)}
+
+  /* the four trend checks the verdict is built from */
+  .mk-checks{
+    display:grid; gap:1px; margin-top:8px; background:var(--line-2);
+    border:1px solid var(--line-2); border-radius:10px; overflow:hidden;
+  }
+  .mk-check{
+    display:flex; align-items:center; justify-content:space-between; gap:10px;
+    background:var(--surface); padding:7px 11px; font-size:12.5px;
+  }
+  .mk-check .k{color:var(--muted); display:inline-flex; align-items:center; gap:7px; min-width:0}
+  .mk-check .k::before{content:""; width:6px; height:6px; border-radius:50%; flex:none; background:var(--faint)}
+  .mk-check.pass .k::before{background:var(--pos)}
+  .mk-check.fail .k::before{background:var(--neg)}
+  .mk-check .v{
+    font-family:var(--mono); font-size:12px; font-weight:600; white-space:nowrap;
+    font-variant-numeric:tabular-nums; color:var(--ink);
+  }
+  .mk-check.pass .v{color:var(--pos)}
+  .mk-check.fail .v{color:var(--neg)}
+
+  /* distribution-day meter */
+  .mk-dist-head{display:flex; align-items:baseline; justify-content:space-between; gap:10px}
+  .mk-n{font-family:var(--mono); font-size:16px; font-weight:600; color:var(--mk); line-height:1}
+  .mk-n s{text-decoration:none; color:var(--faint); font-weight:400; font-size:12px}
+  .mk-pips{display:flex; gap:2px; margin-top:9px; max-width:440px}
+  .mk-pip{flex:1 1 0; min-width:3px; height:9px; border-radius:2px; background:var(--line-2)}
+  .mk-pip.on{background:var(--mk)}
+  .mk-pip.brk{margin-right:7px}
+  .mk-scale{margin-top:7px; font-size:11px; color:var(--faint); line-height:1.45}
+  .mk-scale i{font-style:normal; color:var(--muted); font-weight:600}
+
+  .mk-dates{margin-top:11px}
+  .mk-dates summary{
+    cursor:pointer; font-size:11.5px; color:var(--muted); list-style:none;
+    display:inline-flex; align-items:center; gap:6px;
+    border:1px solid var(--line); border-radius:7px; padding:3px 9px; background:var(--surface-2);
+  }
+  .mk-dates summary::-webkit-details-marker{display:none}
+  .mk-dates summary::after{content:"\25BE"; font-size:9px; color:var(--faint)}
+  .mk-dates[open] summary::after{content:"\25B4"}
+  .mk-dates summary:hover{color:var(--ink); border-color:var(--faint)}
+  .mk-datelist{margin-top:9px; display:grid; gap:4px; grid-template-columns:repeat(auto-fill,minmax(118px,1fr))}
+  .mk-date{
+    display:flex; justify-content:space-between; gap:8px; padding:4px 8px;
+    font-family:var(--mono); font-size:11.5px; font-variant-numeric:tabular-nums;
+    background:var(--surface-2); border-radius:6px;
+  }
+  .mk-date b{font-weight:400; color:var(--muted)}
+  .mk-date span{color:var(--neg); font-weight:600}
   .rs{font-family:var(--mono); font-weight:600}
   .rs.hi{color:var(--pos)} .rs.lo{color:var(--faint)}
-.warnrisk{color:var(--bad);font-weight:600}
+  .warnrisk{color:var(--neg); font-weight:600}
   .empty{padding:44px 20px; text-align:center; color:var(--muted)}
   .empty strong{display:block; font-family:var(--display); font-size:15px; color:var(--ink); margin-bottom:5px}
 
@@ -438,16 +516,66 @@ function render(){
 function marketBanner(m){
   const box = $("marketBox");
   if(!m || !m.verdict){ box.hidden = true; return; }
-  const cls = m.verdict === "CONFIRMED UPTREND" ? "ok" : m.verdict === "UNDER PRESSURE" ? "warn" : "bad";
+  const cls = m.verdict === "CONFIRMED UPTREND" ? "ok"
+            : m.verdict === "UNDER PRESSURE"    ? "warn" : "bad";
+  const lvl  = n => n == null ? "–" : n.toLocaleString("en-IN",{maximumFractionDigits:0});
+  const dist = m.distribution_days ?? 0;
+  const win  = m.distribution_window ?? 25;
+
+  // The four things the verdict is actually made of, each one pass or fail,
+  // so the banner shows its reasoning instead of just its conclusion.
+  const checks = [
+    ["50 DMA",       m.above_50dma,
+     m.sma50  == null ? null : (m.above_50dma  ? "above " : "below ") + lvl(m.sma50)],
+    ["200 DMA",      m.above_200dma,
+     m.sma200 == null ? null : (m.above_200dma ? "above " : "below ") + lvl(m.sma200)],
+    ["50 DMA trend", m.rising_50dma,
+     m.rising_50dma == null ? null : (m.rising_50dma ? "rising" : "falling")],
+    ["Off 52w high", m.pct_off_52w_high == null ? null : m.pct_off_52w_high > -5,
+     m.pct_off_52w_high == null ? null : m.pct_off_52w_high.toFixed(1) + "%"]
+  ].filter(c => c[2] != null).map(([k, ok, v]) =>
+    '<div class="mk-check ' + (ok === true ? "pass" : ok === false ? "fail" : "") + '">' +
+      '<span class="k">' + esc(k) + '</span><span class="v">' + esc(v) + "</span></div>").join("");
+
+  // the window as pips, with a gap after the two thresholds: 4 = pressure, 6 = correction
+  let pips = "";
+  for(let i = 0; i < win; i++){
+    pips += '<span class="mk-pip' + (i < dist ? " on" : "") +
+            (i === 3 || i === 5 ? " brk" : "") + '"></span>';
+  }
+
+  const dd = Array.isArray(m.distribution_detail) ? m.distribution_detail : [];
+  const dates = dd.length
+    ? '<details class="mk-dates"><summary>Which sessions</summary>' +
+      '<div class="mk-datelist">' +
+      dd.map(d => '<span class="mk-date"><b>' + esc(String(d.date || "").slice(5)) + "</b><span>" +
+                  (d.pct == null ? "" : d.pct.toFixed(2) + "%") + "</span></span>").join("") +
+      "</div></details>"
+    : "";
+
   box.hidden = false;
   box.className = "market " + cls;
   box.innerHTML =
-    '<span class="verdict">' + esc(m.verdict) + "</span>" +
-    '<span class="lvl">NIFTY ' + (m.last != null ? m.last.toLocaleString("en-IN") : "–") +
-      ' <span class="' + sgn(m.day_change_pct) + '">' + pct(m.day_change_pct) + "</span>" +
-      " · " + (m.distribution_days ?? "?") + " distribution day" +
-      ((m.distribution_days === 1) ? "" : "s") + " / " + (m.distribution_window ?? 25) + "</span>" +
-    '<span class="note">' + esc(m.advice || "") + "</span>";
+    '<div class="mk-top">' +
+      '<span class="mk-badge"><i class="mk-dot"></i>' + esc(m.verdict) + "</span>" +
+      '<span class="mk-quote"><span class="mk-name">Nifty 50</span><span class="mk-px">' +
+        (m.last == null ? "–"
+          : m.last.toLocaleString("en-IN",{minimumFractionDigits:2, maximumFractionDigits:2})) +
+      '</span><span class="mk-chg ' + sgn(m.day_change_pct) + '">' + pct(m.day_change_pct) +
+      "</span></span>" +
+    "</div>" +
+    '<div class="mk-body">' +
+      (m.advice ? '<p class="mk-advice">' + esc(m.advice) + "</p>" : "") +
+      '<div class="mk-grid">' +
+        '<div><span class="mk-lab">Trend</span><div class="mk-checks">' + checks + "</div></div>" +
+        '<div><div class="mk-dist-head"><span class="mk-lab">Distribution days</span>' +
+          '<span class="mk-n">' + dist + "<s> / " + win + "</s></span></div>" +
+          '<div class="mk-pips">' + pips + "</div>" +
+          '<div class="mk-scale">Sessions the index fell 0.2% or more on heavier volume than the day ' +
+            "before. <i>4+</i> is pressure, <i>6+</i> is a correction.</div>" + dates +
+        "</div>" +
+      "</div>" +
+    "</div>";
 }
 
 function tiles(list){
