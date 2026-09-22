@@ -10,7 +10,7 @@
   img{max-width:100%}
   [hidden]{display:none!important}
 </style>
-<meta name="build" content="2026-09-22-3">
+<meta name="build" content="2026-09-22-5">
   <title>NSE Base Scanner</title>
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Archivo:wght@500;600;700&family=IBM+Plex+Mono:wght@400;500;600&family=IBM+Plex+Sans:wght@400;500;600&display=swap">
@@ -249,6 +249,23 @@
   .rs{font-family:var(--mono); font-weight:600}
   .rs.hi{color:var(--pos)} .rs.lo{color:var(--faint)}
   .warnrisk{color:var(--neg); font-weight:600}
+  /* intraday: stocks in play */
+  .playnote{
+    margin-top:16px; padding:12px 15px; border-radius:12px; font-size:12.5px;
+    line-height:1.6; color:var(--muted);
+    background:var(--surface-2); border:1px solid var(--line);
+    border-left:3px solid var(--warn);
+  }
+  .playnote strong{color:var(--ink)}
+  .rvol{font-family:var(--mono); font-weight:600; font-variant-numeric:tabular-nums}
+  .rvol.hot{color:var(--accent)}
+  .mono{font-family:var(--mono); font-variant-numeric:tabular-nums}
+  .cva{
+    font-family:var(--mono); font-weight:600; cursor:help;
+    font-variant-numeric:tabular-nums; color:var(--muted);
+  }
+  .cva.warn{color:var(--warn)}
+  .cva.bad{color:var(--neg)}
   /* base stage + earnings grade */
   .bs{
     font-family:var(--mono); font-size:11.5px; font-weight:600; display:inline-block;
@@ -300,6 +317,17 @@
   </div>
 
   <div id="marketBox" hidden></div>
+  <div id="playNote" class="playnote" hidden>
+    <strong>Selection, not a tested system.</strong>
+    The research this follows found the opening-range breakout itself returned about
+    3% a year on its own, and about 42% when restricted to the stocks opening on
+    abnormal volume &mdash; the shortlist is the part with evidence behind it, not the entry.
+    Free intraday data reaches back roughly 60 days, which is far too little to backtest,
+    so none of this has been validated on history. SEBI&rsquo;s July 2024 study found 71% of
+    individual intraday traders in the equity cash segment lost money, and that loss-makers
+    paid costs worth an extra 57% of their losses &mdash; which is why every row carries its
+    own break-even. Paper-trade it first.
+  </div>
 
   <div class="tiles" id="tiles"></div>
 
@@ -308,6 +336,7 @@
     <button class="tab" role="tab" id="tab-near" aria-selected="false" data-view="near">Near High <span class="cnt" id="c-near"></span></button>
     <button class="tab" role="tab" id="tab-vol" aria-selected="false" data-view="vol">Volume Surge <span class="cnt" id="c-vol"></span></button>
     <button class="tab" role="tab" id="tab-sig" aria-selected="false" data-view="sig">Cup &amp; Handle <span class="cnt" id="c-sig"></span></button>
+    <button class="tab" role="tab" id="tab-play" aria-selected="false" data-view="play">In Play <span class="cnt" id="c-play"></span></button>
   </div>
 
   <div class="filters" id="filters">
@@ -351,11 +380,13 @@ const SAMPLE = [{"s":"STLNETWORK","n":"STL Networks Limited","p":47.34,"c":10.22
 // ---------- state ----------
 let rows = SAMPLE.slice();     // screened stocks
 let sigs = [];                 // cup & handle signals
+let play = [];                 // this morning's stocks in play (intraday)
+let playNote = "";
 let view = "watch";
 let sort = {key:"sc", dir:-1};
 const VOL_STEPS = [0,10000,25000,50000,100000,200000,300000,500000,750000,1e6,1.5e6,2e6,3e6,5e6,7.5e6,1e7,1.5e7,2e7,3e7,5e7,1e8];
 
-const BUILD = "2026-09-22-3";
+const BUILD = "2026-09-22-5";
 const $ = id => document.getElementById(id);
 
 // ---------- formatting ----------
@@ -432,6 +463,15 @@ function loadSignals(recs){
 // ---------- filtering ----------
 function current(){
   if(view === "sig") return sigs.slice();
+  if(view === "play"){
+    const k = sort.key, d = sort.dir;
+    return play.slice().sort((a, b) => {
+      const x = a[k], y = b[k];
+      if(x == null) return 1; if(y == null) return -1;
+      if(typeof x === "string") return d * x.localeCompare(y);
+      return d * (x - y);
+    });
+  }
   const maxFall = -Math.abs(+$("fHigh").value);
   const minVol = VOL_STEPS[+$("fVol").value];
   const minPrice = +$("fPrice").value;
@@ -482,6 +522,21 @@ const COLS_SIG = [
   {k:"cw",    t:"Cup Wks"}
 ];
 
+const COLS_PLAY = [
+  {k:"s",    t:"Symbol"},
+  {k:"rv",   t:"Rel Vol"},
+  {k:"gap",  t:"Gap"},
+  {k:"atr",  t:"ATR %"},
+  {k:"o",    t:"Open"},
+  {k:"orh",  t:"OR High"},
+  {k:"orl",  t:"OR Low"},
+  {k:"ls",   t:"Long Stop"},
+  {k:"irisk",t:"Stop %"},
+  {k:"be",   t:"Breakeven"},
+  {k:"cva",  t:"Cost / ATR"},
+  {k:"to",   t:"Turnover"}
+];
+
 function cell(r, k){
   switch(k){
     case "s": return '<span class="sym"><a href="' + tv(r.s) + '" target="_blank" rel="noopener">' + esc(r.s) +
@@ -527,13 +582,34 @@ function cell(r, k){
       return '<span class="eg ' + (map[r.eg] || "none") + '" title="' +
              esc(r.en || r.eg) + '">' + esc(label) + "</span>";
     }
+    case "rv": {
+      // abnormal opening volume is the whole selection - make it the loudest thing
+      if(r.rv == null) return "–";
+      return '<span class="rvol' + (r.rv >= 5 ? " hot" : "") + '">' + r.rv.toFixed(1) + "×</span>";
+    }
+    case "gap": return r.gap == null ? "–" :
+      '<span class="' + sgn(r.gap) + '">' + (r.gap > 0 ? "+" : "") + r.gap.toFixed(2) + "%</span>";
+    case "atr": case "irisk": return r[k] == null ? "–" : r[k].toFixed(2) + "%";
+    case "be": return r.be == null ? "–" :
+      '<span class="mono">' + r.be.toFixed(3) + "%</span>";
+    case "cva": {
+      // how much of a normal day's range the round trip eats before you start
+      if(r.cva == null) return "–";
+      const c = r.cva > 15 ? "bad" : r.cva > 8 ? "warn" : "";
+      return '<span class="cva ' + c + '" title="A round trip costs ' +
+        (r.be == null ? "?" : r.be.toFixed(3)) + '% and this stock moves about ' +
+        (r.atr == null ? "?" : r.atr.toFixed(2)) + '% on a normal day.">' +
+        r.cva.toFixed(0) + "%</span>";
+    }
+    case "o": case "orh": case "orl": case "ls": case "ss": case "pc": return inr(r[k]);
+    case "to": return r.to == null ? "–" : "₹" + r.to.toFixed(0) + " cr";
     case "hdep": case "cdep": return r[k] == null ? "–" : r[k].toFixed(1) + "%";
     default: return r[k] == null ? "–" : r[k];
   }
 }
 
 function render(){
-  const cols = view === "sig" ? COLS_SIG : COLS_SCREEN;
+  const cols = view === "sig" ? COLS_SIG : view === "play" ? COLS_PLAY : COLS_SCREEN;
   $("thead").innerHTML = cols.map(c =>
     '<th data-k="' + c.k + '">' + c.t + (sort.key === c.k ? ' <span class="arrow">' + (sort.dir < 0 ? "▼" : "▲") + "</span>" : "") + "</th>").join("");
   const list = current();
@@ -544,10 +620,14 @@ function render(){
     e.hidden = false;
     e.innerHTML = view === "sig"
       ? "<strong>No cup &amp; handle patterns loaded</strong>Run <code>python3 find_patterns.py</code>, then drop <code>cup_handle_signals.csv</code> here. No signals on a given day is normal &mdash; real bases are not common."
+      : view === "play"
+      ? "<strong>Nothing in play</strong>No stock opened on abnormal volume with a real gap. A quiet open is not a reason to trade &mdash; this runs at 09:20 IST each weekday."
       : "<strong>Nothing matches these filters</strong>Widen the distance from the 20-week high, or lower the volume floor.";
   } else e.hidden = true;
 
-  $("filters").hidden = (view === "sig");
+  $("filters").hidden = (view === "sig" || view === "play");
+  $("playNote").hidden = (view !== "play");
+  $("c-play").textContent = play.length ? "(" + play.length + ")" : "";
   $("c-watch").textContent = rows.length ? "(" + rows.length + ")" : "";
   $("c-near").textContent  = "(" + rows.filter(r => (r.fh ?? -999) >= -5).length + ")";
   $("c-vol").textContent   = "(" + rows.filter(r => (r.vx ?? 0) >= 2).length + ")";
@@ -621,6 +701,23 @@ function marketBanner(m){
 }
 
 function tiles(list){
+  if(view === "play"){
+    // the screen tiles describe the delivery watchlist and mean nothing here
+    const hot = play.filter(r => (r.rv ?? 0) >= 5).length;
+    const up  = play.filter(r => (r.gap ?? 0) > 0).length;
+    const med = play.length
+      ? (play.map(r => r.be ?? 0).sort((a, b) => a - b)[Math.floor(play.length / 2)] || 0)
+      : 0;
+    const t2 = [
+      ["In play", play.length, "abnormal opening volume on a real gap"],
+      ["Heavy opens", hot, "5× normal first-five-minute volume or more"],
+      ["Gapping up / down", up + " / " + (play.length - up), "direction of the dislocation"],
+      ["Typical break-even", med.toFixed(3) + "%", "round-trip cost before you make a rupee"]
+    ];
+    $("tiles").innerHTML = t2.map(([k, n, d]) =>
+      '<div class="tile"><div class="k">' + k + '</div><div class="n">' + n + '</div><div class="d">' + d + "</div></div>").join("");
+    return;
+  }
   const nearHigh = rows.filter(r => (r.fh ?? -999) >= -5).length;
   const surge = rows.filter(r => (r.vx ?? 0) >= 2).length;
   const up = rows.filter(r => (r.c ?? 0) > 0).length;
@@ -641,7 +738,9 @@ function tiles(list){
 document.querySelectorAll(".tab").forEach(b => b.addEventListener("click", () => {
   document.querySelectorAll(".tab").forEach(x => x.setAttribute("aria-selected", String(x === b)));
   view = b.dataset.view;
-  sort = view === "sig" ? {key:"toBuy", dir:1} : {key:"sc", dir:-1};
+  sort = view === "sig"  ? {key:"toBuy", dir:1}
+       : view === "play" ? {key:"rv", dir:-1}
+       : {key:"sc", dir:-1};
   render();
 }));
 $("thead").addEventListener("click", e => {
@@ -733,6 +832,15 @@ async function boot(){
   }catch(e){
     $("datastamp").innerHTML = "Sample data \u00B7 <b>22 Sep 2026</b> \u00B7 waiting for the first scheduled run";
   }
+  // the morning run writes its own file, so a missing one is normal, not an error
+  try{
+    const r2 = await fetch("intraday.json?t=" + Date.now(), {cache:"no-store"});
+    if(r2.ok){
+      const p = await r2.json();
+      if(Array.isArray(p.inPlay)) play = p.inPlay;
+      if(p.note) playNote = p.note;
+    }
+  }catch(e){}
   render();
 }
 boot();

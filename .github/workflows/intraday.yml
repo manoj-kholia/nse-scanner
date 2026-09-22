@@ -1,0 +1,50 @@
+name: Morning stocks in play
+
+# Runs just after the NSE open so the first 5-minute bar exists.
+# 03:50 UTC = 09:20 IST, Monday-Friday.
+#
+# This is a SELECTION screen, not a tested system. The research it follows
+# (Zarattini/Barbon/Aziz) found the opening-range breakout itself returned
+# ~3% a year unfiltered, and ~42% when restricted to the stocks with the most
+# abnormal opening volume - so the value is in the shortlist, not the entry.
+# Free intraday data reaches back ~60 days, which is far too little to
+# backtest. Treat the output as a watchlist to study and paper-trade.
+
+on:
+  schedule:
+    - cron: "50 3 * * 1-5"
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  in-play:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: pip
+
+      - name: Install dependencies
+        run: pip install -r requirements.txt
+
+      # Uses the liquidity figures from last evening's full scan, so this run
+      # only has to pull 5-minute bars for ~200 names rather than 2,300.
+      - name: Find the stocks in play
+        run: python intraday.py
+
+      - name: Build the dashboard data
+        run: python build_intraday.py
+
+      - name: Commit the results
+        run: |
+          git config user.name  "nse-scanner"
+          git config user.email "actions@users.noreply.github.com"
+          git add -A docs stocks_in_play.csv intraday_watchlist.txt 2>/dev/null || true
+          git diff --staged --quiet || git commit -m "In play $(TZ=Asia/Kolkata date +'%Y-%m-%d %H:%M IST')"
+          git push

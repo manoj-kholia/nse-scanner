@@ -1,0 +1,355 @@
+#!/usr/bin/env python3
+"""
+intraday.py
+-----------
+"Stocks in play" - the opening-range selection screen.
+
+WHY THIS IS THE SELECTION AND NOT THE ENTRY
+Zarattini, Barbon and Aziz tested a 5-minute opening range breakout across
+7,000+ US stocks from 2016-2023. Run on everything, it returned 3.2% a year -
+nothing. Run on only the 20 stocks each day with the most abnormal opening
+volume, it returned 41.6% a year. The breakout rule was almost worthless; the
+SELECTION carried the result. So this module spends its effort on picking the
+right handful of stocks, and treats the entry as the simple part.
+
+That is the same lesson the cup-and-handle work produced: the pattern mattered
+far less than what the stock was and how it was trading.
+
+WHAT IT MEASURES
+    relative volume   today's first 5 minutes against the MEDIAN first five
+                      minutes of the last 14 sessions. Median, not mean, so one
+                      past news day cannot flatten today's signal.
+    gap               today's open against yesterday's close. A stock needs
+                      some dislocation to be worth a day's attention.
+    ATR%              the daily true range as a % of price - how far this stock
+                      actually travels, which decides both the stop and whether
+                      the move can pay for the trade at all.
+    break-even        what the round trip costs, from trading_costs.py, so the
+                      cost is on the same row as the opportunity.
+
+WHAT THIS IS NOT
+It is not backtested. Free intraday data reaches back about 60 days, which is
+an anecdote rather than a sample. Treat the output as a watchlist to study and
+paper-trade, and read the break-even column before you believe any of it.
+"""
+
+import os
+import time
+import argparse
+from datetime import datetime
+
+import numpy as np
+import pandas as pd
+
+import trading_costs
+
+HERE = os.path.dirname(os.path.abspath(__file__))
+LIVE = os.path.join(HERE, "EQUITY_L_live.csv")
+OUT_CSV = os.path.join(HERE, "stocks_in_play.csv")
+OUT_TV = os.path.join(HERE, "intraday_watchlist.txt")
+
+IST = "Asia/Kolkata"
+SESSION_OPEN = "09:15"
+
+P = dict(
+    universe_top=200,      # how many liquid names to pull intraday data for
+    min_turnover_cr=5.0,   # average daily turnover, Rs crore - slippage floor
+    min_price=50.0,        # below this the tick size eats the move
+    max_price=20000.0,
+    open_bars=1,           # the opening range: 1 bar of 5 min = 09:15-09:20
+    lookback=14,           # sessions of history for the relative-volume base
+    min_rvol=2.0,          # "abnormal" opening volume starts here
+    min_gap=0.5,           # % - needs some dislocation to be in play
+    min_atr=1.5,           # % - must travel far enough to cover costs
+    stop_atr_frac=0.10,    # O'Neil-style tight stop: 10% of the 14-day ATR
+    position=100000.0,     # Rs, for the break-even calculation
+    top=20,                # the research used the top 20 by opening volume
+)
+
+
+# ----------------------------------------------------------------- universe --
+def liquid_universe(live, p=P):
+    """Names liquid enough that intraday slippage will not eat the edge.
+
+    Deliberately NOT the cup-and-handle screen: intraday wants turnover and
+    range, not a base near the highs.
+    """
+    d = live[live["Last Price"].notna()].copy()
+    for c in ["Last Price", "Avg Volume 20d", "Bars"]:
+        d[c] = pd.to_numeric(d.get(c), errors="coerce")
+    d = d.dropna(subset=["Last Price", "Avg Volume 20d"])
+
+    d["Turnover_Cr"] = (d["Last Price"] * d["Avg Volume 20d"] / 1e7).round(2)
+    d = d[
+        (d["Last Price"] >= p["min_price"])
+        & (d["Last Price"] <= p["max_price"])
+        & (d["Turnover_Cr"] >= p["min_turnover_cr"])
+        & (d["Bars"].fillna(0) >= 60)
+    ]
+    return (d.sort_values("Turnover_Cr", ascending=False)
+             .head(p["universe_top"]).reset_index(drop=True))
+
+
+# --------------------------------------------------------------- session math --
+def _sessions(df):
+    """Split a tz-aware intraday frame into one frame per trading date."""
+    if df is None or df.empty:
+        return []
+    d = df.dropna(subset=["Open", "High", "Low", "Close"]).copy()
+    if not isinstance(d.index, pd.DatetimeIndex) or d.empty:
+        return []
+    try:
+        d.index = (d.index.tz_convert(IST) if d.index.tz is not None
+                   else d.index.tz_localize("UTC").tz_convert(IST))
+    except (TypeError, ValueError):
+        return []
+    return [(day, g) for day, g in d.groupby(d.index.date) if len(g)]
+
+
+def _daily_atr(sessions, n=14):
+    """ATR from intraday bars rolled up to daily - no second download needed."""
+    if len(sessions) < 3:
+        return None
+    rows = [dict(High=g["High"].max(), Low=g["Low"].min(), Close=g["Close"].iloc[-1])
+            for _, g in sessions]
+    d = pd.DataFrame(rows)
+    prev = d["Close"].shift(1)
+    tr = pd.concat([d["High"] - d["Low"],
+                    (d["High"] - prev).abs(),
+                    (d["Low"] - prev).abs()], axis=1).max(axis=1)
+    atr = tr.tail(min(n, len(tr))).mean()
+    return float(atr) if np.isfinite(atr) else None
+
+
+def opening_stats(df, p=P):
+    """Today's opening behaviour against its own recent history.
+
+    Returns None when there is not enough history to make the comparison
+    meaningful - a blank is better than a number built on three sessions.
+    """
+    sess = _sessions(df)
+    if len(sess) < 4:
+        return None
+
+    today_date, today = sess[-1]
+    prior = sess[:-1][-p["lookback"]:]
+    if len(prior) < 3:
+        return None
+
+    def opening(g):
+        """The first `open_bars` bars of a session, if it really opened on time."""
+        first = g.index[0]
+        if f"{first.hour:02d}:{first.minute:02d}" > "09:30":   # late/partial data
+            return None
+        return g.iloc[:p["open_bars"]]
+
+    o_today = opening(today)
+    if o_today is None or o_today.empty:
+        return None
+
+    base = [opening(g) for _, g in prior]
+    base_vols = [float(b["Volume"].sum()) for b in base if b is not None and len(b)]
+    if len(base_vols) < 3:
+        return None
+    median_open_vol = float(np.median(base_vols))
+    if median_open_vol <= 0:
+        return None
+
+    open_vol = float(o_today["Volume"].sum())
+    prev_close = float(prior[-1][1]["Close"].iloc[-1])
+    day_open = float(o_today["Open"].iloc[0])
+    if prev_close <= 0 or day_open <= 0:
+        return None
+
+    atr = _daily_atr(prior)
+    or_hi, or_lo = float(o_today["High"].max()), float(o_today["Low"].min())
+
+    return dict(
+        Session=str(today_date),
+        Prev_Close=round(prev_close, 2),
+        Open=round(day_open, 2),
+        Gap_pct=round((day_open / prev_close - 1) * 100, 2),
+        Open_Vol=int(open_vol),
+        RVol=round(open_vol / median_open_vol, 2),
+        ATR=round(atr, 2) if atr else None,
+        ATR_pct=round(atr / day_open * 100, 2) if atr else None,
+        OR_High=round(or_hi, 2),
+        OR_Low=round(or_lo, 2),
+        OR_Range_pct=round((or_hi - or_lo) / day_open * 100, 2),
+        Last=round(float(today["Close"].iloc[-1]), 2),
+        Bars_Today=int(len(today)),
+    )
+
+
+def add_trade_plan(row, p=P):
+    """The ORB entry, its stop, and what the round trip costs.
+
+    The stop is 10% of the 14-day ATR, which is the figure the research used -
+    tight, so the losers are small and the rare winner pays for them.
+    """
+    atr, price = row.get("ATR"), row.get("Open")
+    out = dict(Long_Trigger=row.get("OR_High"), Short_Trigger=row.get("OR_Low"))
+
+    stop_dist = atr * p["stop_atr_frac"] if atr else None
+    out["Stop_Dist"] = round(stop_dist, 2) if stop_dist else None
+    if stop_dist and row.get("OR_High"):
+        out["Long_Stop"] = round(row["OR_High"] - stop_dist, 2)
+        out["Short_Stop"] = round(row["OR_Low"] + stop_dist, 2)
+        out["Risk_pct"] = round(stop_dist / row["OR_High"] * 100, 2)
+
+    be = trading_costs.breakeven_pct(price, p["position"], intraday=True)
+    out["Breakeven_pct"] = be
+    # Is the stock's normal daily travel even big enough to pay for the trade?
+    if be is not None and row.get("ATR_pct"):
+        out["Cost_vs_ATR"] = round(be / row["ATR_pct"] * 100, 1)
+    return out
+
+
+def score(row, p=P):
+    """Rank by abnormal opening volume, which is what the evidence points at.
+
+    Gap and range are gates, not scores - a stock either dislocated enough to be
+    worth the day or it did not.
+    """
+    rv = row.get("RVol") or 0
+    return round(float(rv), 2)
+
+
+# --------------------------------------------------------------------- scan --
+def default_downloader(period="1mo", interval="5m"):
+    import yfinance as yf
+
+    def dl(tickers):
+        return yf.download(tickers, period=period, interval=interval,
+                           group_by="ticker", auto_adjust=False, actions=False,
+                           progress=False, threads=True, prepost=False)
+    return dl
+
+
+def scan(symbols, downloader=None, batch_size=40, pause=1.5, p=P, log=print):
+    """Opening stats for a list of symbols. Returns (rows, scanned, skipped)."""
+    downloader = downloader or default_downloader()
+    rows, scanned, skipped = [], 0, {}
+
+    for start in range(0, len(symbols), batch_size):
+        batch = symbols[start:start + batch_size]
+        tickers = [s + ".NS" for s in batch]
+        try:
+            raw = downloader(tickers)
+        except Exception as exc:
+            log(f"  batch failed: {type(exc).__name__}: {exc}")
+            skipped.setdefault("download failed", []).extend(batch)
+            continue
+
+        for sym, tk in zip(batch, tickers):
+            try:
+                if isinstance(raw.columns, pd.MultiIndex):
+                    if tk not in raw.columns.get_level_values(0):
+                        skipped.setdefault("no data returned", []).append(sym)
+                        continue
+                    df = raw[tk]
+                else:
+                    df = raw
+                scanned += 1
+                st = opening_stats(df, p)
+                if st is None:
+                    skipped.setdefault("not enough session history", []).append(sym)
+                    continue
+                st["Symbol"] = sym
+                st.update(add_trade_plan(st, p))
+                st["Score"] = score(st, p)
+                rows.append(st)
+            except Exception as exc:
+                skipped.setdefault(f"error: {type(exc).__name__}", []).append(sym)
+
+        done = min(start + batch_size, len(symbols))
+        log(f"  {done}/{len(symbols)} fetched - {len(rows)} with usable opening data")
+        if done < len(symbols):
+            time.sleep(pause)
+    return rows, scanned, skipped
+
+
+def in_play(rows, p=P):
+    """Apply the gates, then rank."""
+    if not rows:
+        return pd.DataFrame()
+    d = pd.DataFrame(rows)
+    d = d[
+        (d["RVol"] >= p["min_rvol"])
+        & (d["Gap_pct"].abs() >= p["min_gap"])
+        & (d["ATR_pct"].fillna(0) >= p["min_atr"])
+    ]
+    return d.sort_values("Score", ascending=False).head(p["top"]).reset_index(drop=True)
+
+
+COLS = ["Symbol", "Company", "Session", "Score", "RVol", "Gap_pct", "ATR_pct",
+        "Prev_Close", "Open", "OR_High", "OR_Low", "OR_Range_pct",
+        "Long_Trigger", "Long_Stop", "Short_Trigger", "Short_Stop",
+        "Stop_Dist", "Risk_pct", "Breakeven_pct", "Cost_vs_ATR",
+        "Turnover_Cr", "Open_Vol", "Last"]
+
+
+def main():
+    ap = argparse.ArgumentParser(description="Opening-range 'stocks in play' screen")
+    ap.add_argument("--source", default=LIVE)
+    ap.add_argument("--top", type=int, default=P["top"])
+    ap.add_argument("--universe-top", type=int, default=P["universe_top"])
+    ap.add_argument("--min-rvol", type=float, default=P["min_rvol"])
+    ap.add_argument("--min-gap", type=float, default=P["min_gap"])
+    ap.add_argument("--position", type=float, default=P["position"],
+                    help="position size in rupees, for the break-even column")
+    ap.add_argument("--batch-size", type=int, default=40)
+    ap.add_argument("--pause", type=float, default=1.5)
+    args = ap.parse_args()
+
+    if not os.path.exists(args.source):
+        raise SystemExit(f"Cannot find {args.source}. Run update_nse_data.py first.")
+
+    p = dict(P, top=args.top, universe_top=args.universe_top,
+             min_rvol=args.min_rvol, min_gap=args.min_gap, position=args.position)
+
+    live = pd.read_csv(args.source)
+    uni = liquid_universe(live, p)
+    names = dict(zip(uni["Symbol"], uni["Company"]))
+    turn = dict(zip(uni["Symbol"], uni["Turnover_Cr"]))
+    print(f"{datetime.now():%Y-%m-%d %H:%M}  {len(uni)} liquid names "
+          f"(turnover >= Rs {p['min_turnover_cr']}cr, price Rs {p['min_price']}+)")
+
+    rows, scanned, skipped = scan(uni["Symbol"].tolist(), batch_size=args.batch_size,
+                                  pause=args.pause, p=p)
+    picks = in_play(rows, p)
+
+    if skipped:
+        print("\nSkipped:")
+        for why, syms in sorted(skipped.items(), key=lambda kv: -len(kv[1])):
+            shown = ", ".join(syms[:6]) + ("..." if len(syms) > 6 else "")
+            print(f"  {len(syms):3d}  {why:<32} {shown}")
+
+    if picks.empty:
+        print(f"\nFetched {scanned}. Nothing in play today - no stock opened with "
+              f"{p['min_rvol']}x its normal volume on a {p['min_gap']}%+ gap.")
+        print("That is a normal result. A quiet open is not a reason to trade.")
+        return
+
+    picks.insert(1, "Company", picks["Symbol"].map(names))
+    picks["Turnover_Cr"] = picks["Symbol"].map(turn)
+    picks[[c for c in COLS if c in picks]].to_csv(OUT_CSV, index=False)
+    with open(OUT_TV, "w") as fh:
+        fh.write(",".join("NSE:" + s for s in picks["Symbol"]))
+
+    print(f"\nFetched {scanned}.  In play: {len(picks)}")
+    print(f"  wrote {OUT_CSV}")
+    print(f"  wrote {OUT_TV}\n")
+    show = [c for c in ["Symbol", "RVol", "Gap_pct", "ATR_pct", "Open",
+                        "OR_High", "OR_Low", "Risk_pct", "Breakeven_pct",
+                        "Cost_vs_ATR"] if c in picks]
+    print(picks[show].to_string(index=False))
+
+    thin = picks[picks["Cost_vs_ATR"].fillna(0) > 15]
+    for _, r in thin.iterrows():
+        print(f"  !! {r['Symbol']}: costs eat {r['Cost_vs_ATR']:.0f}% of a normal "
+              "day's range - the move has to be near-perfect to pay")
+
+
+if __name__ == "__main__":
+    main()

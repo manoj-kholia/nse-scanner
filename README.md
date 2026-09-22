@@ -158,6 +158,44 @@ looks wrong. A loss that turned into a profit is reported as "loss to profit"
 rather than an invented percentage. Nothing is dropped for missing data;
 `--require-earnings` turns FAIL into a filter if you want it to be one.
 
+## The intraday side (separate, and much weaker evidence)
+
+`intraday.py` runs at **09:20 IST** each weekday and produces a *stocks in play*
+shortlist: the liquid names that opened on abnormal volume with a real gap.
+`build_intraday.py` publishes it to the **In Play** tab.
+
+**Read this before using it.** Zarattini, Barbon and Aziz tested a 5-minute
+opening range breakout on 7,000+ US stocks, 2016-2023. Unfiltered it returned
+**3.2% a year** — nothing. Restricted to the 20 stocks each day with the most
+abnormal opening volume it returned **41.6%**. The breakout rule was almost
+worthless; the *selection* carried the result. That is why this module spends
+its effort on the shortlist and treats the entry as the simple part.
+
+It is **not backtested**. Free intraday data reaches back about 60 days, which
+is an anecdote, not a sample. A real test needs years of minute bars — a paid
+broker API (Kite Connect, Dhan, Fyers) or a data vendor.
+
+SEBI's July 2024 study of the equity cash segment found **71% of individual
+intraday traders lost money** in FY23, rising to **80%** for those trading 500+
+times a year. The finding that shaped this code: loss-makers paid transaction
+costs worth an **extra 57% of their losses**, while profit-makers spent 19% of
+their profits. So `trading_costs.py` puts a break-even number on every row —
+what the round trip costs, and what share of a normal day's range that eats.
+
+| Column | Means |
+|---|---|
+| Rel Vol | today's first five minutes against the **median** of the last 14 sessions |
+| Gap | open against yesterday's close |
+| ATR % | how far the stock travels on a normal day |
+| OR High / Low | the opening range — the 09:15–09:20 bar |
+| Stop % | a stop at 10% of the 14-day ATR, the figure the research used |
+| Breakeven | round-trip cost as a % of the position |
+| Cost / ATR | what share of a normal day's range the costs eat — amber past 8%, red past 15% |
+
+Settings live in the `P` dict at the top of `intraday.py`; broker rates live at
+the top of `trading_costs.py` and **should be checked against your own contract
+note**, because if your rates are higher every number here is optimistic.
+
 ## Changing the rules
 
 | What | Where |
