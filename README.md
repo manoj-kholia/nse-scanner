@@ -14,9 +14,10 @@ Runs entirely on GitHub's free tier. Nothing to install, no server, no cost.
 | Step | Script | Output |
 |---|---|---|
 | 1. Fetch prices, 20W/52W high-low, volume, 50 & 200 DMA | `update_nse_data.py` | `EQUITY_L_live.csv` |
-| 2. Keep stocks above both MAs and near their highs | `screen_stocks.py` | shortlist |
-| 3. Find cup-and-handle bases and breakouts | `find_patterns.py` | `cup_handle_signals.csv` |
-| 4. Pack it for the dashboard | `build_site.py` | `docs/data.json` |
+| 2. Keep RS 80+ leaders above both MAs, near their highs | `screen_stocks.py` | shortlist |
+| 3. Judge market health from the Nifty 50 | `market_filter.py` | `market.json` |
+| 4. Find cup-and-handle bases and breakouts | `find_patterns.py` | `cup_handle_signals.csv` |
+| 5. Pack it for the dashboard | `build_site.py` | `docs/data.json` |
 
 The dashboard is `docs/index.html`. Click any symbol to open its daily chart in
 TradingView.
@@ -76,12 +77,35 @@ After that it runs itself every weekday at 18:30 IST.
 
 ---
 
+## Two O'Neil rules this now enforces
+
+**RS Rating (the "L" in CANSLIM).** Each stock's weighted 3/6/9/12-month price
+performance is percentile-ranked 1-99 against the whole 2,300-stock universe.
+O'Neil treats 80+ as leadership and under 70 as a laggard, so the screen keeps
+only 80+. Change it with `--min-rs`, or pass `--min-rs 0` to switch it off.
+
+**Market direction (the "M").** Most stocks follow the market, so breakouts
+bought during a correction tend to fail. `market_filter.py` reads the Nifty 50
+and returns one of three verdicts, shown as a banner on the dashboard:
+
+| Verdict | Meaning |
+|---|---|
+| CONFIRMED UPTREND | above the 50 and 200 DMA, 50 DMA rising, under 4 distribution days |
+| UNDER PRESSURE | trend intact but institutions selling - trade smaller |
+| CORRECTION | below the 50 DMA or 6+ distribution days - do not buy breakouts |
+
+A *distribution day* is a session where the index fell 0.2% or more on higher
+volume than the day before. Signals are still listed during a correction - the
+tool tells you the market is hostile rather than hiding them.
+
 ## Changing the rules
 
 | What | Where |
 |---|---|
 | Screening filters (distance from high, min volume, min price) | `screen_stocks.py`, the `screen()` defaults |
 | Cup-and-handle rules (depth, length, handle, volume) | `find_patterns.py`, the `P` dictionary at the top |
+| RS floor | `--min-rs` on `screen_stocks.py` and `find_patterns.py` |
+| Market thresholds (distribution days) | `market_filter.py`, the constants at the top |
 | Run time | `.github/workflows/daily.yml` — cron is in **UTC**, so 13:00 UTC = 18:30 IST |
 
 Push any change and the next run uses it.
@@ -90,7 +114,7 @@ Push any change and the next run uses it.
 
 ```bash
 pip3 install -r requirements.txt
-python3 update_nse_data.py && python3 screen_stocks.py && python3 find_patterns.py && python3 build_site.py
+python3 update_nse_data.py && python3 screen_stocks.py && python3 market_filter.py && python3 find_patterns.py && python3 build_site.py
 open docs/index.html
 ```
 

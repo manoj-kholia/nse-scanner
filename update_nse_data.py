@@ -114,6 +114,26 @@ def metrics(df):
     dma50 = dma(50)
     dma200 = dma(200)
 
+    # --- Relative strength, O'Neil style -------------------------------------
+    # Weighted price performance: the most recent quarter counts double the
+    # others. This is the public approximation of IBD's proprietary RS Rating.
+    # The raw number is meaningless on its own - it only matters once every
+    # stock in the universe is ranked against it (done in build()).
+    def perf(n):
+        if len(close) > n:
+            past = float(close.iloc[-n - 1])
+            return (last / past - 1) * 100 if past > 0 else None
+        return None
+
+    windows = [(63, 0.4), (126, 0.2), (189, 0.2), (252, 0.2)]   # 3, 6, 9, 12 months
+    parts = [(perf(n), w) for n, w in windows]
+    have = [(p, w) for p, w in parts if p is not None]
+    # need at least 6 months of history for the number to mean anything
+    rs_raw = None
+    if len(have) >= 2:
+        tot_w = sum(w for _, w in have)
+        rs_raw = round(sum(p * w for p, w in have) / tot_w, 2)
+
     return {
         "Last Price": round(last, 2),
         "Day Change %": round(chg, 2),
@@ -129,6 +149,7 @@ def metrics(df):
         "50 DMA": dma50,
         "200 DMA": dma200,
         "Above 200 DMA": ("Yes" if last > dma200 else "No") if dma200 else None,
+        "RS Raw": rs_raw,
         "Bars": len(df),
     }
 
@@ -191,16 +212,32 @@ def fetch_all(symbols, batch_size=60, pause=1.5, period="1y", retries=2, downloa
     return results, failed
 
 
+def rs_rating(raw):
+    """Percentile-rank raw relative strength across the universe onto 1-99.
+
+    O'Neil's point is that leadership is RELATIVE: an RS Rating of 80 means the
+    stock outperformed 80% of the market. So the number only exists once every
+    stock is ranked together - it cannot be computed one stock at a time.
+    """
+    s = pd.to_numeric(raw, errors="coerce")
+    if s.notna().sum() < 2:
+        return pd.Series([None] * len(s), index=s.index)
+    pct = s.rank(pct=True, method="average") * 100
+    return pct.round().clip(1, 99).astype("Int64")
+
+
 def build(listing, results):
     cols = ["Last Price", "Day Change %", "Volume", "Avg Volume 20d", "Volume x Avg",
             "20W High", "20W Low", "% From 20W High", "% Above 20W Low",
-            "52W High", "52W Low", "50 DMA", "200 DMA", "Above 200 DMA", "Bars"]
+            "52W High", "52W Low", "50 DMA", "200 DMA", "Above 200 DMA",
+            "RS Raw", "Bars"]
     rows = []
     for sym in listing["Symbol"]:
         m = results.get(sym)
         rows.append(m if m else {c: None for c in cols})
     data = pd.DataFrame(rows, columns=cols)
     out = pd.concat([listing.reset_index(drop=True), data], axis=1)
+    out["RS Rating"] = rs_rating(out["RS Raw"])
     out.insert(0, "Updated", datetime.now().strftime("%Y-%m-%d %H:%M"))
     return out
 

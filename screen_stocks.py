@@ -31,16 +31,23 @@ SRC = os.path.join(HERE, "EQUITY_L_live.csv")
 OUT_XLSX = os.path.join(HERE, "EQUITY_L_shortlist.xlsx")
 OUT_TV = os.path.join(HERE, "watchlist_tradingview.txt")
 
-SHOW = ["Symbol", "Company", "Last Price", "Day Change %", "% From 20W High",
-        "% Above 20W Low", "20W High", "20W Low", "Volume", "Avg Volume 20d",
-        "Volume x Avg", "50 DMA", "200 DMA", "Score"]
+SHOW = ["Symbol", "Company", "Last Price", "Day Change %", "RS Rating",
+        "% From 20W High", "% Above 20W Low", "20W High", "20W Low", "Volume",
+        "Avg Volume 20d", "Volume x Avg", "50 DMA", "200 DMA", "Score"]
 
 
-def screen(df, from_high=-15.0, min_vol=50000, min_price=20.0, min_bars=120):
+def screen(df, from_high=-15.0, min_vol=50000, min_price=20.0, min_bars=120,
+           min_rs=80):
+    """O'Neil's 'L' - leaders, not laggards - plus liquidity and trend.
+
+    min_rs is the RS Rating floor. O'Neil treats 80+ as leadership and under 70
+    as a laggard, so 80 is his line, not mine. Pass 0 to ignore it.
+    """
     d = df[df["Last Price"].notna()].copy()
     for c in ["Last Price", "50 DMA", "200 DMA", "% From 20W High",
               "% Above 20W Low", "Avg Volume 20d", "Volume x Avg", "Bars"]:
         d[c] = pd.to_numeric(d[c], errors="coerce")
+    d["RS Rating"] = pd.to_numeric(d.get("RS Rating"), errors="coerce")
 
     d = d[
         (d["Bars"] >= min_bars)                       # enough history to trust
@@ -51,6 +58,9 @@ def screen(df, from_high=-15.0, min_vol=50000, min_price=20.0, min_bars=120):
         & (d["Avg Volume 20d"] >= min_vol)
         & (d["Last Price"] >= min_price)
     ].copy()
+
+    if min_rs and d["RS Rating"].notna().any():
+        d = d[d["RS Rating"] >= min_rs]
 
     # closer to the high = better; already well off the low = real advance behind it
     d["Score"] = (
@@ -88,6 +98,8 @@ def main():
                     help="max %% below the 20-week high (e.g. -15)")
     ap.add_argument("--min-vol", type=float, default=50000)
     ap.add_argument("--min-price", type=float, default=20.0)
+    ap.add_argument("--min-rs", type=int, default=80,
+                    help="RS Rating floor (O'Neil: 80+ is a leader, under 70 a laggard)")
     ap.add_argument("--top", type=int, default=0, help="keep only the top N by score")
     args = ap.parse_args()
 
@@ -95,7 +107,7 @@ def main():
         raise SystemExit(f"Cannot find {args.source}. Run update_nse_data.py first.")
 
     df = pd.read_csv(args.source)
-    picks = screen(df, args.from_high, args.min_vol, args.min_price)
+    picks = screen(df, args.from_high, args.min_vol, args.min_price, min_rs=args.min_rs)
     if args.top:
         picks = picks.head(args.top)
 
@@ -111,14 +123,16 @@ def main():
         fh.write(",".join("NSE:" + s for s in picks["Symbol"]))
 
     print(f"{datetime.now():%Y-%m-%d %H:%M}  screened {len(df)} rows")
+    print(f"  RS floor     : {args.min_rs}")
     print(f"  watchlist    : {len(picks)}")
     print(f"  near high    : {len(near)}  (within 5% of the 20W high)")
     print(f"  volume surge : {len(surge)}  (2x average volume)")
     print(f"  wrote {OUT_XLSX}")
     print(f"  wrote {OUT_TV}")
     print()
-    print(picks.head(20)[["Symbol", "Last Price", "% From 20W High",
-                          "% Above 20W Low", "Volume x Avg", "Score"]].to_string(index=False))
+    cols = [c for c in ["Symbol", "Last Price", "RS Rating", "% From 20W High",
+                        "% Above 20W Low", "Volume x Avg", "Score"] if c in picks.columns]
+    print(picks.head(20)[cols].to_string(index=False))
 
 
 if __name__ == "__main__":

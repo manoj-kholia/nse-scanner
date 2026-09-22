@@ -19,6 +19,7 @@ Run:  python3 find_patterns.py
 """
 
 import os
+import json
 import time
 import argparse
 from datetime import datetime
@@ -245,9 +246,9 @@ def scan(symbols, downloader=None, batch_size=60, pause=1.5, period="2y",
     return hits, scanned
 
 
-COLS = ["Symbol", "Company", "Stage", "Last_Price", "Buy_Point", "Pct_To_Buy",
-        "Stop", "Target", "Handle_Days", "Handle_Depth_pct", "Cup_Depth_pct",
-        "Cup_Weeks", "Cup_Low", "Vol_x_Avg", "Above_50DMA",
+COLS = ["Symbol", "Company", "Stage", "RS_Rating", "Last_Price", "Buy_Point",
+        "Pct_To_Buy", "Stop", "Target", "Handle_Days", "Handle_Depth_pct",
+        "Cup_Depth_pct", "Cup_Weeks", "Cup_Low", "Vol_x_Avg", "Above_50DMA",
         "Days_Since_Breakout", "Breakout_Price"]
 
 
@@ -277,6 +278,8 @@ def main():
     ap.add_argument("--source", default=LIVE)
     ap.add_argument("--all", action="store_true", help="scan every symbol, not the shortlist")
     ap.add_argument("--days", type=int, default=5, help="report breakouts this recent")
+    ap.add_argument("--min-rs", type=int, default=80,
+                    help="RS Rating floor for candidates (O'Neil: 80+)")
     ap.add_argument("--batch-size", type=int, default=60)
     ap.add_argument("--pause", type=float, default=1.5)
     args = ap.parse_args()
@@ -289,9 +292,24 @@ def main():
         cand = live[live["Last Price"].notna()].copy()
     else:
         import screen_stocks
-        cand = screen_stocks.screen(live)
+        cand = screen_stocks.screen(live, min_rs=args.min_rs)
     names = dict(zip(cand["Symbol"], cand["Company"]))
+    rs = dict(zip(cand["Symbol"], pd.to_numeric(cand.get("RS Rating"), errors="coerce"))) \
+        if "RS Rating" in cand.columns else {}
     syms = cand["Symbol"].tolist()
+
+    # O'Neil's M: most stocks follow the market, so a breakout bought during a
+    # correction usually fails. We still report the patterns - we just say so.
+    market = None
+    try:
+        import market_filter
+        market = market_filter.market_state(market_filter.fetch())
+        print(f"MARKET: {market['verdict']} - Nifty {market['last']} "
+              f"({market['day_change_pct']:+.2f}%), "
+              f"{market['distribution_days']} distribution days")
+        print(f"        {market['advice']}\n")
+    except Exception as exc:
+        print(f"MARKET: could not be checked ({exc}) - treat signals with caution\n")
 
     print(f"{datetime.now():%Y-%m-%d %H:%M}  scanning {len(syms)} stocks for cup & handle")
     hits, scanned = scan(syms, batch_size=args.batch_size, pause=args.pause,
@@ -304,20 +322,27 @@ def main():
 
     df = pd.DataFrame(hits)
     df.insert(1, "Company", df["Symbol"].map(names))
+    df.insert(2, "RS_Rating", df["Symbol"].map(rs))
     df = df.sort_values(["Stage", "Pct_To_Buy"]).reset_index(drop=True)
 
     write_xlsx(df, OUT_XLSX)
     df.to_csv(os.path.join(HERE, "cup_handle_signals.csv"), index=False)
+    if market:
+        with open(os.path.join(HERE, "market.json"), "w") as fh:
+            json.dump(market, fh, indent=1)
     with open(OUT_TV, "w") as fh:
         fh.write(",".join("NSE:" + s for s in df["Symbol"]))
 
     forming = (df["Stage"] == "HANDLE FORMING").sum()
     brk = (df["Stage"] == "BREAKOUT").sum()
     print(f"\nScanned {scanned}.  Handle forming: {forming}   Breakout: {brk}")
+    if market and not market["buy_breakouts"]:
+        print(f"  !! {market['verdict']}: {market['advice']}")
     print(f"  wrote {OUT_XLSX}")
     print(f"  wrote {OUT_TV}\n")
-    show = [c for c in ["Symbol", "Stage", "Last_Price", "Buy_Point", "Pct_To_Buy",
-                        "Stop", "Target", "Handle_Days", "Cup_Depth_pct"] if c in df]
+    show = [c for c in ["Symbol", "Stage", "RS_Rating", "Last_Price", "Buy_Point",
+                        "Pct_To_Buy", "Stop", "Target", "Handle_Days",
+                        "Cup_Depth_pct"] if c in df]
     print(df[show].to_string(index=False))
 
 

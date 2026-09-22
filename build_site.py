@@ -22,12 +22,14 @@ IST = timezone(timedelta(hours=5, minutes=30))
 
 SCREEN_MAP = {
     "Symbol": "s", "Company": "n", "Last Price": "p", "Day Change %": "c",
+    "RS Rating": "rs",
     "% From 20W High": "fh", "% Above 20W Low": "al", "20W High": "h",
     "20W Low": "l", "Volume": "v", "Avg Volume 20d": "av",
     "Volume x Avg": "vx", "50 DMA": "d50", "200 DMA": "d200", "Score": "sc",
 }
 SIG_MAP = {
-    "Symbol": "s", "Company": "n", "Stage": "stage", "Last_Price": "p",
+    "Symbol": "s", "Company": "n", "Stage": "stage", "RS_Rating": "rs",
+    "Last_Price": "p",
     "Buy_Point": "buy", "Pct_To_Buy": "toBuy", "Stop": "stop", "Target": "tgt",
     "Handle_Days": "hd", "Handle_Depth_pct": "hdep", "Cup_Depth_pct": "cdep",
     "Cup_Weeks": "cw", "Vol_x_Avg": "vx", "Days_Since_Breakout": "since",
@@ -75,10 +77,20 @@ def main():
     if "Updated" in live.columns and len(live):
         stamp = str(live["Updated"].iloc[0])
 
+    market = None
+    mpath = os.path.join(HERE, "market.json")
+    if os.path.exists(mpath):
+        try:
+            with open(mpath) as fh:
+                market = json.load(fh)
+        except Exception:
+            market = None
+
     payload = {
         "built": datetime.now(IST).strftime("%d %b %Y, %H:%M IST"),
         "dataStamp": stamp,
         "universe": universe,
+        "market": market,
         "screened": pack(picks, SCREEN_MAP),
         "signals": pack(signals, SIG_MAP) if len(signals) else [],
     }
@@ -89,7 +101,8 @@ def main():
     kb = os.path.getsize(OUT) / 1024
     print(f"wrote {OUT}  ({kb:.0f} KB)")
     print(f"  universe {universe} | screened {len(payload['screened'])} | "
-          f"signals {len(payload['signals'])}")
+          f"signals {len(payload['signals'])} | "
+          f"market {market['verdict'] if market else 'unknown'}")
 
 
 if __name__ == "__main__":

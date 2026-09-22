@@ -30,6 +30,9 @@ jobs:
       - name: Screen for stocks in an uptrend near their highs
         run: python screen_stocks.py
 
+      - name: Check the market's health
+        run: python market_filter.py
+
       - name: Look for cup-and-handle bases
         run: python find_patterns.py --days 5
 
@@ -40,6 +43,6 @@ jobs:
         run: |
           git config user.name  "nse-scanner"
           git config user.email "actions@users.noreply.github.com"
-          git add -A docs EQUITY_L_live.csv cup_handle_signals.csv update_log.txt 2>/dev/null || true
+          git add -A docs EQUITY_L_live.csv cup_handle_signals.csv market.json update_log.txt 2>/dev/null || true
           git diff --staged --quiet || git commit -m "Scan $(TZ=Asia/Kolkata date +'%Y-%m-%d %H:%M IST')"
           git push

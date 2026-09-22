@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
-<meta name="description" content="Personal NSE screener: stocks basing near their 20-week high, with live cup-and-handle signals.">
+<meta name="description" content="Personal NSE screener: market health, RS-rated leaders, and live cup-and-handle signals.">
 <style>
   :root{ color-scheme: light dark; padding-top: env(safe-area-inset-top,0px); padding-bottom: env(safe-area-inset-bottom,0px); }
   html,body{margin:0}
@@ -154,6 +154,21 @@
   }
   .pill.handle{background:var(--accent-soft); color:var(--accent)}
   .pill.brk{background:var(--pos); color:#fff}
+  /* ---- market banner ---- */
+  .market{
+    margin-top:16px; border:1px solid var(--line); border-left-width:4px;
+    border-radius:10px; background:var(--surface); padding:12px 16px;
+    display:flex; gap:14px; align-items:baseline; flex-wrap:wrap;
+  }
+  .market.ok{border-left-color:var(--pos)}
+  .market.warn{border-left-color:var(--warn)}
+  .market.bad{border-left-color:var(--neg)}
+  .market .verdict{font-family:var(--display); font-weight:700; font-size:14px; letter-spacing:-.01em}
+  .market.ok .verdict{color:var(--pos)} .market.warn .verdict{color:var(--warn)} .market.bad .verdict{color:var(--neg)}
+  .market .lvl{font-family:var(--mono); font-size:12.5px; color:var(--muted); font-variant-numeric:tabular-nums}
+  .market .note{font-size:12.5px; color:var(--muted); flex:1 1 260px; min-width:0}
+  .rs{font-family:var(--mono); font-weight:600}
+  .rs.hi{color:var(--pos)} .rs.lo{color:var(--faint)}
   .empty{padding:44px 20px; text-align:center; color:var(--muted)}
   .empty strong{display:block; font-family:var(--display); font-size:15px; color:var(--ink); margin-bottom:5px}
 
@@ -181,10 +196,12 @@
 <div class="wrap">
 
   <div class="drop" id="drop">
-    <p><strong style="color:var(--ink)">Drop your data here.</strong> <code>EQUITY_L_live.csv</code> loads the screen &middot; <code>cup_handle_signals.csv</code> loads the patterns. Nothing leaves your browser.</p>
+    <p><strong style="color:var(--ink)">Drop your data here.</strong> <code>EQUITY_L_live.csv</code> loads the screen &middot; <code>cup_handle_signals.csv</code> loads the patterns · <code>market.json</code> loads the market check. Nothing leaves your browser.</p>
     <button class="primary" id="pickBtn">Choose file</button>
-    <input type="file" id="file" accept=".csv" multiple hidden>
+    <input type="file" id="file" accept=".csv,.json" multiple hidden>
   </div>
+
+  <div id="marketBox" hidden></div>
 
   <div class="tiles" id="tiles"></div>
 
@@ -335,6 +352,7 @@ const COLS_SCREEN = [
   {k:"s",   t:"Symbol"},
   {k:"p",   t:"Price"},
   {k:"c",   t:"Day %"},
+  {k:"rs",  t:"RS Rating"},
   {k:"fh",  t:"From 20W High"},
   {k:"al",  t:"Off 20W Low"},
   {k:"h",   t:"20W High"},
@@ -346,6 +364,7 @@ const COLS_SCREEN = [
 const COLS_SIG = [
   {k:"s",     t:"Symbol"},
   {k:"stage", t:"Stage"},
+  {k:"rs",    t:"RS Rating"},
   {k:"p",     t:"Price"},
   {k:"buy",   t:"Buy Point"},
   {k:"toBuy", t:"% To Buy"},
@@ -370,6 +389,8 @@ function cell(r, k){
       const w = Math.max(0, Math.min(100, (20 + (r.fh ?? -100)) / 20 * 100));
       return '<span class="bar"><i style="width:' + w + '%"></i></span><span class="' + (r.fh > -5 ? "pos" : "") + '">' + pct(r.fh) + "</span>";
     }
+    case "rs": return r.rs == null ? "–" :
+                '<span class="rs ' + (r.rs >= 80 ? "hi" : r.rs < 70 ? "lo" : "") + '">' + Math.round(r.rs) + "</span>";
     case "al": return pct(r.al);
     case "toBuy": return r.toBuy == null ? "–" : (r.toBuy <= 0 ? "at buy point" : "+" + r.toBuy.toFixed(2) + "%");
     case "av": return vol(r.av);
@@ -400,6 +421,21 @@ function render(){
   $("c-vol").textContent   = "(" + rows.filter(r => (r.vx ?? 0) >= 2).length + ")";
   $("c-sig").textContent   = sigs.length ? "(" + sigs.length + ")" : "";
   tiles(list);
+}
+
+function marketBanner(m){
+  const box = $("marketBox");
+  if(!m || !m.verdict){ box.hidden = true; return; }
+  const cls = m.verdict === "CONFIRMED UPTREND" ? "ok" : m.verdict === "UNDER PRESSURE" ? "warn" : "bad";
+  box.hidden = false;
+  box.className = "market " + cls;
+  box.innerHTML =
+    '<span class="verdict">' + esc(m.verdict) + "</span>" +
+    '<span class="lvl">NIFTY ' + (m.last != null ? m.last.toLocaleString("en-IN") : "–") +
+      ' <span class="' + sgn(m.day_change_pct) + '">' + pct(m.day_change_pct) + "</span>" +
+      " · " + (m.distribution_days ?? "?") + " distribution day" +
+      ((m.distribution_days === 1) ? "" : "s") + " / " + (m.distribution_window ?? 25) + "</span>" +
+    '<span class="note">' + esc(m.advice || "") + "</span>";
 }
 
 function tiles(list){
@@ -471,6 +507,10 @@ function handle(files){
   [...files].forEach(f => {
     const rd = new FileReader();
     rd.onload = () => {
+      if(/\.json$/i.test(f.name)){                 // market.json
+        try{ marketBanner(JSON.parse(String(rd.result))); }catch{}
+        return;
+      }
       const recs = parseCSV(String(rd.result));
       if(!recs.length) return;
       if("Stage" in recs[0]) loadSignals(recs);
@@ -499,8 +539,9 @@ async function boot(){
     if(Array.isArray(d.screened) && d.screened.length){
       rows = d.screened;
       $("datastamp").innerHTML = "Updated <b>" + esc(d.built || d.dataStamp || "") + "</b> \u00B7 " +
-        (d.universe || 0).toLocaleString("en-IN") + " stocks scanned \u00B7 " + rows.length + " in uptrend";
+        (d.universe || 0).toLocaleString("en-IN") + " stocks scanned \u00B7 " + rows.length + " leaders in uptrend";
     }
+    marketBanner(d.market);
     if(Array.isArray(d.signals) && d.signals.length){
       sigs = d.signals;
       view = "sig";
