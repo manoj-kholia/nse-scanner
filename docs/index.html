@@ -169,6 +169,7 @@
   .market .note{font-size:12.5px; color:var(--muted); flex:1 1 260px; min-width:0}
   .rs{font-family:var(--mono); font-weight:600}
   .rs.hi{color:var(--pos)} .rs.lo{color:var(--faint)}
+.warnrisk{color:var(--bad);font-weight:600}
   .empty{padding:44px 20px; text-align:center; color:var(--muted)}
   .empty strong{display:block; font-family:var(--display); font-size:15px; color:var(--ink); margin-bottom:5px}
 
@@ -319,7 +320,8 @@ function loadSignals(recs){
   sigs = recs.map(r => ({
     s:r["Symbol"], n:r["Company"], stage:r["Stage"],
     p:num(r["Last_Price"]), buy:num(r["Buy_Point"]), toBuy:num(r["Pct_To_Buy"]),
-    stop:num(r["Stop"]), tgt:num(r["Target"]), hd:num(r["Handle_Days"]),
+    stop:num(r["Stop"]), risk:num(r["Risk_pct"]), tgt:num(r["Target"]),
+    hd:num(r["Handle_Days"]), hlow:num(r["Handle_Low"]),
     hdep:num(r["Handle_Depth_pct"]), cdep:num(r["Cup_Depth_pct"]),
     cw:num(r["Cup_Weeks"]), vx:num(r["Vol_x_Avg"]), since:num(r["Days_Since_Breakout"])
   })).filter(r => r.s);
@@ -369,6 +371,7 @@ const COLS_SIG = [
   {k:"buy",   t:"Buy Point"},
   {k:"toBuy", t:"% To Buy"},
   {k:"stop",  t:"Stop"},
+  {k:"risk",  t:"Risk"},
   {k:"tgt",   t:"Target"},
   {k:"hd",    t:"Handle Day"},
   {k:"hdep",  t:"Handle %"},
@@ -395,6 +398,15 @@ function cell(r, k){
     case "toBuy": return r.toBuy == null ? "–" : (r.toBuy <= 0 ? "at buy point" : "+" + r.toBuy.toFixed(2) + "%");
     case "av": return vol(r.av);
     case "vx": return r.vx == null ? "–" : '<span class="' + (r.vx >= 2 ? "pos" : "") + '">' + r.vx.toFixed(2) + "×</span>";
+    case "risk": {
+      if(r.risk == null) return "–";
+      // at the 8% cap the handle low sits BELOW the stop: loose base, the
+      // 7-8% rule is doing the work rather than the chart structure
+      const loose = r.hlow != null && r.buy != null && r.hlow < r.buy * 0.921;
+      return '<span class="' + (loose ? "warnrisk" : "") + '" title="' +
+        (loose ? "Loose handle - the handle low (" + inr(r.hlow) + ") is more than 8% under the buy point, so the 7-8% rule sets this stop, not the chart."
+               : "Handle low, which is tighter than the 8% rule.") + '">−' + r.risk.toFixed(1) + "%</span>";
+    }
     case "hdep": case "cdep": return r[k] == null ? "–" : r[k].toFixed(1) + "%";
     default: return r[k] == null ? "–" : r[k];
   }

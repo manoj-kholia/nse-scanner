@@ -30,8 +30,10 @@ SCREEN_MAP = {
 SIG_MAP = {
     "Symbol": "s", "Company": "n", "Stage": "stage", "RS_Rating": "rs",
     "Last_Price": "p",
-    "Buy_Point": "buy", "Pct_To_Buy": "toBuy", "Stop": "stop", "Target": "tgt",
-    "Handle_Days": "hd", "Handle_Depth_pct": "hdep", "Cup_Depth_pct": "cdep",
+    "Buy_Point": "buy", "Pct_To_Buy": "toBuy", "Stop": "stop",
+    "Risk_pct": "risk", "Target": "tgt",
+    "Handle_Days": "hd", "Handle_Low": "hlow", "Handle_Depth_pct": "hdep",
+    "Cup_Depth_pct": "cdep",
     "Cup_Weeks": "cw", "Vol_x_Avg": "vx", "Days_Since_Breakout": "since",
 }
 

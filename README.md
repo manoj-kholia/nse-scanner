@@ -98,6 +98,16 @@ A *distribution day* is a session where the index fell 0.2% or more on higher
 volume than the day before. Signals are still listed during a correction - the
 tool tells you the market is hostile rather than hiding them.
 
+**The stop, and the Risk column.** O'Neil's one unbreakable rule is to sell at
+7-8% below what you paid. The `Stop` column used to show the handle low, which
+sounds right but is not: on a loose handle that low can sit 10-12% under the
+buy point, so "the stop" quietly committed you to a loss half again bigger than
+the rule allows. The stop is now the tighter of the handle low and 8% below the
+price you would actually pay - the buy point while a handle is forming, the
+breakout close once it has broken out. `Risk` shows what that stop costs you,
+and turns red when the handle low is below it, which is the tool telling you
+the base is loose and the 8% rule is carrying the stop rather than the chart.
+
 ## Changing the rules
 
 | What | Where |

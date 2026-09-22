@@ -59,6 +59,7 @@ P = dict(
     vol_mult=1.4,
     vol_len=50,
     max_ext=0.05,        # never chase more than this far past the buy point
+    max_loss=0.08,       # O'Neil's hard stop: 7-8% below what you paid
 )
 
 
@@ -157,6 +158,18 @@ def handle_quality(close, vol, avg_vol, start, end, buy, p=P):
     return round(slope, 3), (round(dry, 2) if dry is not None else None)
 
 
+def oneil_stop(entry, handle_low, max_loss=P["max_loss"]):
+    """Where to cut, for a purchase made at `entry`.
+
+    O'Neil's one unbreakable rule is to sell at 7-8% below what you paid, no
+    matter what the chart says. The handle low is the structural level, and it
+    is the right stop only when it is TIGHTER than that. When the handle is
+    loose - as most of ours are - the 8% rule wins, otherwise a "stop" at the
+    handle low quietly commits you to a 10-12% loss.
+    """
+    return max(float(handle_low), float(entry) * (1 - max_loss))
+
+
 def evaluate(df, cup, p=P, breakout_window=5):
     """Given a cup, work out what the handle has done since the right rim.
 
@@ -218,6 +231,7 @@ def evaluate(df, cup, p=P, breakout_window=5):
         Last_Price=round(px, 2),
         Cup_Depth_pct=round(cup["depth"] * 100, 1),
         Cup_Weeks=round(cup["length"] / 5, 1),
+        Handle_Low=round(h_low, 2),
         Handle_Depth_pct=round(h_depth * 100, 1),
         Handle_Days=int(days),
         Handle_Slope=slope,
@@ -242,10 +256,12 @@ def evaluate(df, cup, p=P, breakout_window=5):
         # couple of days of follow-through.
         if px > buy * (1 + p["max_ext"]):
             return None, "extended past the buy point"
-        stop = max(h_low, float(close[bo]) * 0.92)
+        entry = float(close[bo])
+        stop = oneil_stop(entry, h_low)
         return dict(Stage="BREAKOUT", Days_Since_Breakout=int(since),
-                    Breakout_Price=round(float(close[bo]), 2),
+                    Breakout_Price=round(entry, 2),
                     Stop=round(stop, 2),
+                    Risk_pct=round((1 - stop / entry) * 100, 1),
                     Pct_To_Buy=round((buy / px - 1) * 100, 2), **common), None
 
     # no breakout yet - is the handle still alive?
@@ -254,8 +270,12 @@ def evaluate(df, cup, p=P, breakout_window=5):
     if px > buy * (1 + p["max_ext"]):
         return None, "extended past the buy point"
 
+    # The stop belongs to the price you will actually pay, which is the buy
+    # point - not today's price, because you are not supposed to buy yet.
+    stop = oneil_stop(buy, h_low)
     return dict(Stage="HANDLE FORMING", Days_Since_Breakout=None,
-                Breakout_Price=None, Stop=round(max(h_low, px * 0.92), 2),
+                Breakout_Price=None, Stop=round(stop, 2),
+                Risk_pct=round((1 - stop / buy) * 100, 1),
                 Pct_To_Buy=round((buy / px - 1) * 100, 2), **common), None
 
 
@@ -305,7 +325,8 @@ def scan(symbols, downloader=None, batch_size=60, pause=1.5, period="2y",
 
 
 COLS = ["Symbol", "Company", "Stage", "RS_Rating", "Last_Price", "Buy_Point",
-        "Pct_To_Buy", "Stop", "Target", "Handle_Days", "Handle_Depth_pct",
+        "Pct_To_Buy", "Stop", "Risk_pct", "Target", "Handle_Days",
+        "Handle_Low", "Handle_Depth_pct",
         "Handle_Slope", "Handle_Vol", "Cup_Depth_pct", "Cup_Weeks", "Cup_Low",
         "Vol_x_Avg", "Above_50DMA", "Days_Since_Breakout", "Breakout_Price"]
 

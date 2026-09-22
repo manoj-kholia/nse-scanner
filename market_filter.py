@@ -104,7 +104,9 @@ def market_state(df):
         "sma200": round(sma200, 2) if sma200 else None,
         "distribution_days": dist,
         "distribution_window": DIST_WINDOW,
-        "distribution_detail": dist_list[-8:],
+        # every one of them - truncating this list made the banner ("9 days")
+        # disagree with what the dashboard actually listed underneath it
+        "distribution_detail": dist_list,
         "pct_off_52w_high": round(off_high, 2),
         "checked": datetime.now(IST).strftime("%d %b %Y, %H:%M IST"),
     }
