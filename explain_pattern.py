@@ -146,7 +146,15 @@ def explain(sym, df, live, min_rs=80):
     ri, buy = cup["right"], cup["buy"]
     days = last - ri
     avg_vol = pd.Series(vol).rolling(fp.P["vol_len"]).mean().to_numpy()
-    slope, dry = fp.handle_quality(close, vol, avg_vol, ri + 1, n, buy, fp.P)
+    # The handle ENDS at the breakout bar, if there is one. Measuring the slope
+    # through that bar describes the breakout, not the handle, and reports a
+    # spurious "wedges upward" on every stock that has already broken out.
+    bo = fp.breakout_index(df, cup, fp.P)
+    h_end = bo if bo is not None else n
+    slope, dry = fp.handle_quality(close, vol, avg_vol, ri + 1, h_end, buy, fp.P)
+    if bo is not None:
+        print(f"    (broke out {last - bo} session(s) ago at bar {bo}; the handle")
+        print(f"     is measured up to that bar, not through it)")
     h_low = float(low[ri + 1:].min()) if n > ri + 1 else float("nan")
     h_depth = (buy - h_low) / buy if buy else float("nan")
     px = float(close[last])

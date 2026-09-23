@@ -249,6 +249,34 @@ def oneil_stop(entry, handle_low, max_loss=P["max_loss"]):
     return max(float(handle_low), float(entry) * (1 - max_loss))
 
 
+def breakout_index(df, cup, p=P):
+    """Index of the first qualifying breakout after the right rim, or None.
+
+    Shared by evaluate() and by explain_pattern.py. The handle ENDS here: the
+    breakout bar's price and volume both spike, so measuring the handle's slope
+    or its volume through that bar describes the breakout, not the handle.
+    Keeping one definition means the scanner and the tool that explains the
+    scanner cannot drift apart.
+    """
+    close = df["Close"].to_numpy(float)
+    vol = df["Volume"].to_numpy(float)
+    n = len(df)
+    ri, buy = cup["right"], cup["buy"]
+    avg_vol = pd.Series(vol).rolling(p["vol_len"]).mean().to_numpy()
+    sma200 = pd.Series(close).rolling(200).mean().to_numpy()
+    for i in range(ri + 1, n):
+        if i - ri < p["handle_min"]:
+            continue
+        if close[i] <= buy or close[i] > buy * (1 + p["max_ext"]):
+            continue
+        if not np.isnan(avg_vol[i]) and vol[i] < p["vol_mult"] * avg_vol[i]:
+            continue
+        if not np.isnan(sma200[i]) and close[i] <= sma200[i]:
+            continue
+        return i
+    return None
+
+
 def evaluate(df, cup, p=P, breakout_window=5):
     """Given a cup, work out what the handle has done since the right rim.
 
@@ -278,19 +306,7 @@ def evaluate(df, cup, p=P, breakout_window=5):
     h_depth = (buy - h_low) / buy
     days = last - ri
 
-    # first qualifying breakout after the rim
-    bo = None
-    for i in range(ri + 1, n):
-        if i - ri < p["handle_min"]:
-            continue
-        if close[i] <= buy or close[i] > buy * (1 + p["max_ext"]):
-            continue
-        if not np.isnan(avg_vol[i]) and vol[i] < p["vol_mult"] * avg_vol[i]:
-            continue
-        if not np.isnan(sma200[i]) and close[i] <= sma200[i]:
-            continue
-        bo = i
-        break
+    bo = breakout_index(df, cup, p)
 
     px = float(close[last])
 
