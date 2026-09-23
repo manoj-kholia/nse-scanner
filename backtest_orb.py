@@ -63,6 +63,10 @@ import trading_costs
 # the filters the live screen uses, so the test measures the live screen
 MIN_RVOL, MIN_GAP, MIN_ATR, LOOKBACK = 2.0, 0.5, 1.5, 14
 
+# Clock times to test walking away at, and targets to test taking.
+EXIT_TIMES = ("13:00", "14:00", "14:30", "15:00", "15:10", "15:15", "15:25")
+TARGETS = (1, 2, 3, 5, 10)
+
 
 def sessions_of(df):
     """[(date, frame)] in IST, oldest first."""
@@ -129,20 +133,73 @@ def setups(df, stop_frac, cost_pct):
             out.append(dict(triggered=False))
             continue
 
-        mfe, stopped = 0.0, False
+        cl = after["Close"].to_numpy(float)
+        clock = after.index.strftime("%H:%M").to_numpy()
+
+        # Walk once and keep the whole path in R. Every exit rule below is then
+        # evaluated on the SAME trade rather than re-simulated, so the rules can
+        # be compared without any of them getting a different set of days.
+        mfe, stopped, stop_i = 0.0, False, None
+        path = []               # (clock, high R, close R) up to the stop
         for k in range(ei, len(after)):
             adverse = (entry - lo[k]) / sd if long else (hi[k] - entry) / sd
             favour = (hi[k] - entry) / sd if long else (entry - lo[k]) / sd
             if adverse >= 1:            # conservative: the stop goes first
-                stopped = True
+                stopped, stop_i = True, k
                 break
             mfe = max(mfe, favour)
+            path.append((clock[k], favour,
+                         ((cl[k] - entry) if long else (entry - cl[k])) / sd))
 
         eod = float(after["Close"].iloc[-1])
         eod_r = -1.0 if stopped else ((eod - entry) if long else (entry - eod)) / sd
+
+        # R if you simply walked away at a given clock time
+        r_at = {}
+        for t in EXIT_TIMES:
+            done = [p for p in path if p[0] <= t]
+            if stopped and (stop_i is not None) and clock[stop_i] <= t:
+                r_at[t] = -1.0
+            elif done:
+                r_at[t] = done[-1][2]
+            else:
+                r_at[t] = 0.0       # flat: never got that far into the day
+
+        # Did the target print before the stop did, and what happened after
+        tgt, part = {}, {}
+        for k in TARGETS:
+            j = next((i for i, p in enumerate(path) if p[1] >= k), None)
+            tgt[k] = j is not None
+            if j is None:
+                part[k] = -1.0 if stopped else eod_r
+            else:
+                # half off at the target, half held to the close on the same stop
+                part[k] = 0.5 * k + 0.5 * (-1.0 if stopped else eod_r)
+
         out.append(dict(triggered=True, stopped=stopped, mfe=mfe, eod_r=eod_r,
+                        r_at=r_at, tgt=tgt, part=part,
                         cost_r=cost_pct / (stop_frac * atr_pct)))
     return out
+
+
+def noise_by_time(frames):
+    """Average 5-minute true range, as a % of price, by clock time.
+
+    This settles the "the last fifteen minutes are the noisiest" question with
+    the tape instead of a feeling. If the closing bars really are wilder, they
+    show up here as a fatter number.
+    """
+    buckets = {}
+    for df in frames.values():
+        for _, g in intraday._sessions(df):
+            if len(g) < 30:
+                continue
+            rng = ((g["High"] - g["Low"]) / g["Close"] * 100).to_numpy(float)
+            for t, v in zip(g.index.strftime("%H:%M"), rng):
+                if np.isfinite(v):
+                    buckets.setdefault(t, []).append(v)
+    return {t: (round(float(np.mean(v)), 3), len(v))
+            for t, v in sorted(buckets.items()) if len(v) > 50}
 
 
 def summarise(trades, targets=(1, 2, 3, 5, 10)):
@@ -172,6 +229,16 @@ def summarise(trades, targets=(1, 2, 3, 5, 10)):
     for k in targets:
         res[f"target {k}R"] = score(
             lambda t, k=k: k if t["mfe"] >= k else (-1.0 if t["stopped"] else t["eod_r"]))
+    # half off at the target, half held to the close - the usual objection to
+    # a hard target is that it sells the runners, and this is the fix people
+    # actually use, so it gets measured too rather than argued about
+    for k in targets:
+        if "part" in T[0]:
+            res[f"half at {k}R"] = score(lambda t, k=k: t["part"][k])
+    # and simply walking away earlier in the day
+    if "r_at" in T[0]:
+        for t0 in EXIT_TIMES:
+            res[f"walk at {t0}"] = score(lambda t, t0=t0: t["r_at"][t0])
     return res
 
 
@@ -255,13 +322,36 @@ def main():
         if keep:
             print(f"\n  exit rule at the {intraday.P['stop_atr_frac']:.2f} ATR stop:")
             print(f"  {'rule':<16} {'avg R':>8} {'win%':>6} {'t':>6}  {'95% CI':>18}")
-            rules = ["exit at close"] + [k for k in keep if k.startswith("target ")]
+            rules = (["exit at close"]
+                     + [k for k in keep if k.startswith("target ")]
+                     + [k for k in keep if k.startswith("half at ")]
+                     + [k for k in keep if k.startswith("walk at ")])
             for name in rules:
                 v = keep[name]
                 ci = (f"[{v['ci95'][0]:+.2f}, {v['ci95'][1]:+.2f}]"
                       if v.get("ci95") else "")
                 print(f"  {name:<16} {v['avg_r']:>+8.3f} {v['win_pct']:>5}% "
                       f"{v['t'] if v['t'] is not None else 0:>6.2f}  {ci:>18}")
+
+    # Is the close really the noisy part of the day?
+    prof = noise_by_time(frames)
+    if prof:
+        print("\n=== how wild is each part of the day? ===")
+        print("  average 5-minute range as a % of price, all names, all sessions")
+        worst = sorted(prof.items(), key=lambda kv: -kv[1][0])[:5]
+        print("  widest bars:  " + "   ".join(f"{t} {v:.3f}%" for t, (v, _) in worst))
+        late = [t for t in prof if t >= "15:10"]
+        mid = [t for t in prof if "11:00" <= t < "14:00"]
+        if late and mid:
+            lm = np.mean([prof[t][0] for t in late])
+            mm = np.mean([prof[t][0] for t in mid])
+            print(f"  last 20 min average {lm:.3f}%   midday average {mm:.3f}%"
+                  f"   ratio {lm / mm:.2f}x" if mm else "")
+        for t in ("09:15", "09:30", "10:00", "12:00", "14:00",
+                  "15:00", "15:10", "15:15", "15:20", "15:25"):
+            if t in prof:
+                v, n = prof[t]
+                print(f"    {t}  {v:6.3f}%  {'#' * int(v * 40):<28} n={n}")
 
     print("\nA t below about 2 means the sample cannot tell this apart from zero.")
     print("The two tables differ ONLY in the slippage assumption. If they disagree")
