@@ -11,25 +11,29 @@ ATR that is a stop roughly 0.3% wide - barely more than the 0.183% it costs to
 do the round trip. You end up paying most of your risk budget in fees before
 the trade has a chance.
 
-Measured on 23 Sep 2026, 50 liquid names, 60 sessions, 177 triggered setups:
+Measured on 23 Sep 2026, 50 liquid names, 60 sessions, 179 triggered setups:
 
-    stop        stopped out   costs      avg R at close
-    0.10 ATR        90%       0.72R      -0.759   t=-2.53  CI [-1.35, -0.17]
-    0.25 ATR        64%       0.29R      -0.018
-    0.50 ATR        34%       0.14R      +0.078   t= 0.72  CI [-0.14, +0.29]
-    0.75 ATR        17%       0.10R      +0.030
-    1.00 ATR         7%       0.07R      +0.023
+    stop     fees only (0.082%)        fees + slippage (0.182%)
+    0.10A    -0.544  t=-1.93           -0.759  t=-2.53  CI [-1.35, -0.17]
+    0.50A    +0.204  t= 1.68           +0.078  t= 0.72  CI [-0.14, +0.29]
 
-The 0.10 stop is significantly NEGATIVE. The 0.50 stop is indistinguishable
-from zero - it stops the bleeding, it does not create an edge. Nothing here
-justifies real money, and this file is what you re-run to find out whether
-that changes.
+READ THAT TWICE. Whether the tight stop is "significantly loss-making" or
+merely "bad" depends entirely on one assumption: how much you lose to
+slippage. At 0.05% a side it is significant; at zero it is not. Nothing in
+the data settles it, so this script prints BOTH columns every run rather
+than picking one and hiding the choice. Zero slippage is not achievable -
+you cross a real spread on a stock that just gapped - so the truth sits
+nearer the right-hand column, but "nearer" is doing work there.
+
+What both columns agree on: the 0.10 ATR stop from the US paper loses
+money on NSE, and widening it to 0.50 removes the bleed without creating
+an edge - every confidence interval still contains zero.
 
 HONEST LIMITS
   * ~60 sessions of 5-minute data is all Yahoo gives. One market window.
   * 5-minute bars, so the path inside a bar is approximated. When a bar could
     have hit both target and stop, the STOP is assumed first.
-  * Costs exclude slippage, which makes every number here optimistic.
+  * Slippage is an assumption, not a measurement - see above.
   * The universe is today's liquid names applied to the past - mild
     survivorship bias.
 
@@ -175,11 +179,22 @@ def main():
     live = pd.read_csv(args.source)
     uni = intraday.liquid_universe(live, dict(intraday.P, universe_top=args.top))
     syms = uni["Symbol"].tolist()
-    # one representative round-trip cost, as a % of position
-    cost_pct = trading_costs.breakeven_pct(500, intraday.P["position"],
-                                           intraday=True, slippage=0)
+
+    # Two cost assumptions, always both. Slippage is the single biggest lever
+    # on the answer and it is an assumption rather than a fee, so hiding the
+    # choice inside a default would be the whole problem.
+    scenarios = [
+        ("fees only", trading_costs.breakeven_pct(
+            500, intraday.P["position"], intraday=True, slippage=0)),
+        (f"fees + {trading_costs.DEFAULT_SLIPPAGE * 100:.2f}% slippage a side",
+         trading_costs.breakeven_pct(
+            500, intraday.P["position"], intraday=True,
+            slippage=trading_costs.DEFAULT_SLIPPAGE)),
+    ]
     print(f"{datetime.now():%Y-%m-%d %H:%M}  {len(syms)} names, 60 sessions of 5m bars")
-    print(f"  round trip modelled at {cost_pct}% of position (slippage NOT included)\n")
+    for label, pct in scenarios:
+        print(f"  {label:<28} round trip = {pct}% of position")
+    print()
 
     dl = intraday.default_downloader(period="60d", interval="5m")
     frames = {}
@@ -201,30 +216,33 @@ def main():
     if not frames:
         raise SystemExit("No intraday data came back - nothing to test.")
 
-    print(f"\n{'stop':>10} {'setups':>7} {'trig%':>6} {'stop-out%':>10} "
-          f"{'costs(R)':>9} {'close':>8} {'t':>6}  {'95% CI':>18}")
-    print("-" * 82)
-    for frac in [float(x) for x in args.stops.split(",")]:
-        trades = []
-        for s, f in frames.items():
-            try:
-                trades += setups(f, frac, cost_pct)
-            except Exception:
+    for label, cost_pct in scenarios:
+        print(f"\n=== {label} ({cost_pct}% round trip) ===")
+        print(f"{'stop':>10} {'setups':>7} {'trig%':>6} {'stop-out%':>10} "
+              f"{'costs(R)':>9} {'close':>8} {'t':>6}  {'95% CI':>18}")
+        print("-" * 82)
+        for frac in [float(x) for x in args.stops.split(",")]:
+            trades = []
+            for s, f in frames.items():
+                try:
+                    trades += setups(f, frac, cost_pct)
+                except Exception:
+                    continue
+            r = summarise(trades)
+            if not r:
                 continue
-        r = summarise(trades)
-        if not r:
-            continue
-        c = r["exit at close"]
-        ci = f"[{c['ci95'][0]:+.2f}, {c['ci95'][1]:+.2f}]" if c["ci95"] else ""
-        print(f"{frac:>9.2f}A {r['setups']:>7} {r['trigger_pct']:>5.0f}% "
-              f"{r['stopped_pct']:>9}% {r['avg_cost_r']:>9.2f} "
-              f"{c['avg_r']:>+8.3f} {c['t'] if c['t'] is not None else 0:>6.2f}  {ci:>18}")
-        if abs(frac - 0.50) < 1e-9:
-            print(f"{'':>10} reached: " + "  ".join(
-                f"{k} {v}%" for k, v in r["reached"].items()))
+            c = r["exit at close"]
+            ci = f"[{c['ci95'][0]:+.2f}, {c['ci95'][1]:+.2f}]" if c["ci95"] else ""
+            print(f"{frac:>9.2f}A {r['setups']:>7} {r['trigger_pct']:>5.0f}% "
+                  f"{r['stopped_pct']:>9}% {r['avg_cost_r']:>9.2f} "
+                  f"{c['avg_r']:>+8.3f} {c['t'] if c['t'] is not None else 0:>6.2f}  {ci:>18}")
+            if abs(frac - 0.50) < 1e-9:
+                print(f"{'':>10} reached: " + "  ".join(
+                    f"{k} {v}%" for k, v in r["reached"].items()))
 
     print("\nA t below about 2 means the sample cannot tell this apart from zero.")
-    print("Costs exclude slippage, so the real numbers are worse, not better.")
+    print("The two tables differ ONLY in the slippage assumption. If they disagree")
+    print("about whether something is significant, the data has not settled it.")
 
 
 if __name__ == "__main__":
