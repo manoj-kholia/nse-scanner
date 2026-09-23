@@ -344,6 +344,40 @@ def evaluate(df, cup, p=P, breakout_window=5):
                 Pct_To_Buy=round((buy / px - 1) * 100, 2), **common), None
 
 
+MARKET_CLOSE = "15:30"          # IST
+
+
+def drop_unfinished_session(df, now=None):
+    """Remove today's bar while the market is still open.
+
+    Yahoo serves the in-progress day as if it were a finished daily bar, and
+    two of this scanner's tests are wrecked by that:
+
+      * VOLUME IS CUMULATIVE. At 09:42 a stock has traded 27 minutes' worth.
+        The breakout test wants 1.4x the 50-day average volume, which a
+        part-day total can almost never reach - so real breakouts are invisible
+        mid-session and appear only after the close.
+      * THE RANGE IS INCOMPLETE. "Extended past the buy point", "broke back
+        below it" and the handle's depth are all judged against a high, low and
+        close that have not finished happening.
+
+    The visible symptom is a watchlist that changes every time you run it. The
+    honest answer is that daily patterns can only be as fresh as the last
+    FINISHED day, so mid-session this drops the part-day bar and reports
+    yesterday's completed picture, which does not flicker.
+    """
+    if df is None or df.empty or not isinstance(df.index, pd.DatetimeIndex):
+        return df, False
+    now = now or pd.Timestamp.now(tz="Asia/Kolkata")
+    last = df.index[-1]
+    last_date = last.date() if hasattr(last, "date") else last
+    if last_date != now.date():
+        return df, False                       # last bar is an earlier session
+    if now.strftime("%H:%M") >= MARKET_CLOSE:
+        return df, False                       # today is over, the bar is real
+    return df.iloc[:-1], True
+
+
 def scan(symbols, downloader=None, batch_size=60, pause=1.5, period="2y",
          breakout_window=5, log=print):
     if downloader is None:
@@ -352,6 +386,7 @@ def scan(symbols, downloader=None, batch_size=60, pause=1.5, period="2y",
                                            group_by="ticker", auto_adjust=False,
                                            actions=False, progress=False, threads=True)
     hits, scanned, rejected = [], 0, {}
+    dropped_partial = [0]
     for start in range(0, len(symbols), batch_size):
         batch = symbols[start:start + batch_size]
         tickers = [s + ".NS" for s in batch]
@@ -369,6 +404,9 @@ def scan(symbols, downloader=None, batch_size=60, pause=1.5, period="2y",
                 else:
                     df = raw
                 df = df.dropna(subset=["Close", "High", "Low"])
+                df, trimmed = drop_unfinished_session(df)
+                if trimmed:
+                    dropped_partial[0] += 1
                 if len(df) < 60:
                     continue
                 scanned += 1
@@ -386,6 +424,13 @@ def scan(symbols, downloader=None, batch_size=60, pause=1.5, period="2y",
         log(f"  {done}/{len(symbols)} scanned - {len(hits)} patterns so far")
         if done < len(symbols):
             time.sleep(pause)
+    if dropped_partial[0]:
+        log(f"  NOTE: the market is still open, so today's part-day bar was "
+            f"dropped for {dropped_partial[0]} symbols.")
+        log("  These are yesterday's completed patterns. A mid-session scan "
+            "cannot see today's breakouts,")
+        log("  because a breakout needs 1.4x average volume and today's volume "
+            "is not finished accumulating.")
     return hits, scanned, rejected
 
 
