@@ -509,6 +509,33 @@ COLS = ["Symbol", "Company", "Stage", "RS_Rating", "Base_Stage",
         "Earnings_Note"]
 
 
+def write_no_signals(reason, log=print):
+    """A scan that finds nothing must still overwrite yesterday's files.
+
+    Both "nothing found" paths used to just `return`, which left the previous
+    run's cup_handle_signals.csv sitting on disk. build_site.py reads that file,
+    so the dashboard reprinted the LAST SUCCESSFUL scan's signals under a fresh
+    "built" timestamp. A day with no setups was indistinguishable from a day
+    with yesterday's setups, and nothing on the page gave it away.
+
+    That is how SPLPETRO survived on the list after the holiday-bar fix removed
+    its base: the scan correctly found nothing, returned early, and the site
+    republished the stale row - buy point, stop and target included.
+
+    Silence has to be published as silence.
+    """
+    empty = pd.DataFrame(columns=COLS)
+    empty.to_csv(os.path.join(HERE, "cup_handle_signals.csv"), index=False)
+    try:
+        write_xlsx(empty, OUT_XLSX)
+    except Exception as exc:                      # never let this hide the CSV
+        log(f"  (xlsx not rewritten: {type(exc).__name__}: {exc})")
+    with open(OUT_TV, "w") as fh:
+        fh.write("")
+    log(f"  Wrote empty signal files ({reason}), so the dashboard publishes "
+        "an empty list rather than reprinting the last run's.")
+
+
 def write_xlsx(df, path):
     def tab(xw, name, data):
         if data.empty:
@@ -588,6 +615,7 @@ def main():
         print(f"\nScanned {scanned}. No tradeable cup-and-handle setups today.")
         print("That is a normal result - real bases are not common every day,")
         print("and they are scarcest when the market itself is under pressure.")
+        write_no_signals("no cups passed the rules")
         return
 
     df = pd.DataFrame(hits)
@@ -621,6 +649,7 @@ def main():
 
     if not len(df):
         print("\nNothing left after the filters.")
+        write_no_signals("every candidate was filtered out")
         return
 
     df = df.sort_values(["Stage", "Pct_To_Buy"]).reset_index(drop=True)
