@@ -172,6 +172,30 @@ price comes from the 09:15 bar (reliable) and volume from the **09:20-09:25**
 window, selected by clock time so a missing bar cannot shift it. That bar has
 to have closed before the run, hence 09:27.
 
+### It was tested here, and it has no demonstrated edge
+
+`backtest_orb.py` runs the whole thing on your own universe. Measured
+23 Sep 2026 — 50 liquid NSE names, 60 sessions, **177 triggered setups**,
+exiting at the close:
+
+| Stop | Stopped out | Costs | Avg R | t | 95% CI |
+|---|---|---|---|---|---|
+| **0.10 ATR** *(the US paper's)* | 90% | **0.72R** | **−0.759** | −2.53 | [−1.35, −0.17] |
+| 0.25 ATR | 64% | 0.29R | −0.018 | | |
+| **0.50 ATR** *(now the default)* | 34% | 0.14R | +0.078 | 0.72 | [−0.14, +0.29] |
+| 0.75 ATR | 17% | 0.10R | +0.030 | | |
+| 1.00 ATR | 7% | 0.07R | +0.023 | | |
+
+The 0.10-ATR stop is **significantly negative**. On a 3%-ATR NSE stock it is
+only ~0.3% wide, barely more than the 0.183% round trip, so fees ate most of
+the risk budget before the trade had a chance. Widening it removes the bleed,
+but the confidence interval still **crosses zero — no edge was demonstrated**.
+
+Only **5.6%** of triggered trades ever reached 1 ATR, so a 1-ATR target is hit
+about one day in eighteen. Costs exclude slippage, so every number is
+optimistic. Re-run `backtest_orb.py` as sessions accumulate and see whether
+that changes; treat the tab as a watchlist until it does.
+
 **Read this before using it.** Zarattini, Barbon and Aziz tested a 5-minute
 opening range breakout on 7,000+ US stocks, 2016-2023. Unfiltered it returned
 **3.2% a year** — nothing. Restricted to the 20 stocks each day with the most
@@ -196,7 +220,7 @@ what the round trip costs, and what share of a normal day's range that eats.
 | Gap | open against yesterday's close |
 | ATR % | how far the stock travels on a normal day |
 | OR High / Low | the opening range — the 09:15–09:20 bar |
-| Stop % | a stop at 10% of the 14-day ATR, the figure the research used |
+| Stop % | a stop at 50% of the 14-day ATR — see the test above for why not 10% |
 | Breakeven | round-trip cost as a % of the position |
 | Cost / ATR | what share of a normal day's range the costs eat — amber past 8%, red past 15% |
 

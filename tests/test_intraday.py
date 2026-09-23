@@ -107,7 +107,10 @@ mover = [(d, 100.0, dict(drift=0.03)) for d in DATES[:-1]]
 st = it.opening_stats(book(mover + [(DATES[-1], 102.0, dict(open_vol=50000, drift=0.03))]))
 plan = it.add_trade_plan(st)
 check("ATR% is measured", st["ATR_pct"] > 1.0, True)
-check("stop is 10% of ATR", round(plan["Stop_Dist"] / st["ATR"], 3), 0.1)
+# 0.50, not the 0.10 the US paper used: measured on 177 NSE setups the tight
+# stop was hit 90% of the time and lost 0.759R a trade (see backtest_orb.py).
+check("stop is 50% of ATR", round(plan["Stop_Dist"] / st["ATR"], 3), 0.5, tol=0.005)
+check("  ...which is what the config says", it.P["stop_atr_frac"], 0.5)
 check("long trigger is the opening-range high", plan["Long_Trigger"], st["OR_High"])
 check("break-even is attached to the row", plan["Breakeven_pct"] > 0, True)
 

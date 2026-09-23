@@ -10,7 +10,7 @@
   img{max-width:100%}
   [hidden]{display:none!important}
 </style>
-<meta name="build" content="2026-09-23-1">
+<meta name="build" content="2026-09-23-2">
   <title>NSE Base Scanner</title>
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Archivo:wght@500;600;700&family=IBM+Plex+Mono:wght@400;500;600&family=IBM+Plex+Sans:wght@400;500;600&display=swap">
@@ -256,7 +256,14 @@
     background:var(--surface-2); border:1px solid var(--line);
     border-left:3px solid var(--warn);
   }
-  .playnote strong{color:var(--ink)}
+  .playnote strong{color:var(--ink); display:block; margin-bottom:6px}
+  .ptest{border-collapse:collapse; margin:9px 0; font-family:var(--mono); font-size:11.5px}
+  .ptest th, .ptest td{padding:3px 12px 3px 0; text-align:left; white-space:nowrap}
+  .ptest th{color:var(--faint); font-family:var(--sans); font-size:10px;
+            letter-spacing:.06em; text-transform:uppercase; font-weight:600}
+  .ptest tr.bad td{color:var(--neg)}
+  .ptest tr.now td{color:var(--ink); font-weight:600}
+  .ptest em{font-style:normal; color:var(--accent); font-weight:600}
   .playstatus{
     margin-top:12px; padding:12px 15px; border-radius:12px; font-size:12.5px;
     line-height:1.6; background:var(--surface); border:1px solid var(--line);
@@ -360,16 +367,24 @@
   </div>
 
   <div id="marketBox" hidden></div>
-  <div id="playNote" class="playnote" hidden>
-    <strong>Selection, not a tested system.</strong>
-    The research this follows found the opening-range breakout itself returned about
-    3% a year on its own, and about 42% when restricted to the stocks opening on
-    abnormal volume &mdash; the shortlist is the part with evidence behind it, not the entry.
-    Free intraday data reaches back roughly 60 days, which is far too little to backtest,
-    so none of this has been validated on history. SEBI&rsquo;s July 2024 study found 71% of
-    individual intraday traders in the equity cash segment lost money, and that loss-makers
-    paid costs worth an extra 57% of their losses &mdash; which is why every row carries its
-    own break-even. Paper-trade it first.
+  <div id="playNote" class="playnote">
+    <strong>Tested on your own stocks. It has no demonstrated edge.</strong>
+    177 triggered setups across 50 liquid NSE names over 60 sessions
+    (<code>backtest_orb.py</code>, 23 Sep 2026), exiting at the close:
+    <table class="ptest">
+      <tr><th>Stop</th><th>Stopped out</th><th>Costs</th><th>Avg R</th><th>95% CI</th></tr>
+      <tr class="bad"><td>0.10 ATR</td><td>90%</td><td>0.72R</td><td>&minus;0.759</td><td>[&minus;1.35, &minus;0.17]</td></tr>
+      <tr class="now"><td>0.50 ATR <em>(now used)</em></td><td>34%</td><td>0.14R</td><td>+0.078</td><td>[&minus;0.14, +0.29]</td></tr>
+      <tr><td>1.00 ATR</td><td>7%</td><td>0.07R</td><td>+0.023</td><td>&mdash;</td></tr>
+    </table>
+    The 0.10-ATR stop the US research uses is <b>significantly negative here</b> &mdash; on a
+    3%-ATR stock it is only ~0.3% wide, barely more than the 0.183% round trip, so fees ate
+    most of the risk budget. Widening it stops the bleeding but the confidence interval still
+    <b>crosses zero: no edge was demonstrated</b>. Only 5.6% of trades ever reached 1 ATR, so a
+    1-ATR target is hit about one day in eighteen.
+    Costs exclude slippage, so the real numbers are worse. SEBI, July 2024: 71% of individual
+    intraday traders in the equity cash segment lost money.
+    <b>Treat this as a watchlist and paper-trade it. Nothing here justifies real money.</b>
   </div>
   <div id="playStatus" class="playstatus" hidden></div>
 
@@ -460,7 +475,7 @@ let view = "watch";
 let sort = {key:"sc", dir:-1};
 const VOL_STEPS = [0,10000,25000,50000,100000,200000,300000,500000,750000,1e6,1.5e6,2e6,3e6,5e6,7.5e6,1e7,1.5e7,2e7,3e7,5e7,1e8];
 
-const BUILD = "2026-09-23-1";
+const BUILD = "2026-09-23-2";
 const $ = id => document.getElementById(id);
 
 // ---------- formatting ----------

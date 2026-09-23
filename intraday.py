@@ -76,7 +76,16 @@ P = dict(
     min_rvol=2.0,          # "abnormal" opening volume starts here
     min_gap=0.5,           # % - needs some dislocation to be in play
     min_atr=1.5,           # % - must travel far enough to cover costs
-    stop_atr_frac=0.10,    # O'Neil-style tight stop: 10% of the 14-day ATR
+    # 0.50, not the 0.10 the US research used. Measured on 177 triggered
+    # setups across 50 liquid NSE names over 60 sessions (backtest_orb.py):
+    #   0.10 ATR -> stopped out 90% of the time, costs alone ate 0.72R per
+    #               trade, and the whole thing lost 0.759R per trade
+    #               (t = -2.53, 95% CI [-1.35, -0.17]) - significantly negative
+    #   0.50 ATR -> stopped 34%, costs 0.14R, +0.078R per trade
+    #               (t = 0.72, CI [-0.14, +0.29]) - no edge, but no bleed
+    # A 0.10-ATR stop on a 3%-ATR stock is ~0.3% wide, barely more than the
+    # 0.183% round trip. You were paying most of your risk budget in fees.
+    stop_atr_frac=0.50,
     position=100000.0,     # Rs, for the break-even calculation
     top=20,                # the research used the top 20 by opening volume
 )
