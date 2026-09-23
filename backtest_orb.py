@@ -11,23 +11,31 @@ ATR that is a stop roughly 0.3% wide - barely more than the 0.183% it costs to
 do the round trip. You end up paying most of your risk budget in fees before
 the trade has a chance.
 
-Measured on 23 Sep 2026, 50 liquid names, 60 sessions, 179 triggered setups:
+Measured on 23 Sep 2026, 50 liquid names, 60 sessions, 248 qualifying days
+of which 72% triggered (179 trades), exiting at the close:
 
-    stop     fees only (0.082%)        fees + slippage (0.182%)
-    0.10A    -0.544  t=-1.93           -0.759  t=-2.53  CI [-1.35, -0.17]
-    0.50A    +0.204  t= 1.68           +0.078  t= 0.72  CI [-0.14, +0.29]
+    stop   fees only (0.082%)              fees + slippage (0.182%)
+    0.10A  -0.544  t=-1.93  [-1.10,+0.01]  -0.905  t=-3.21  [-1.46,-0.35]
+    0.25A  +0.174  t= 0.91  [-0.20,+0.55]  +0.029  t= 0.15  [-0.35,+0.40]
+    0.50A  +0.204  t= 1.68  [-0.03,+0.44]  +0.132  t= 1.09  [-0.10,+0.37]
+    0.75A  +0.125  t= 1.49  [-0.04,+0.29]  +0.076  t= 0.91  [-0.09,+0.24]
+    1.00A  +0.086  t= 1.34  [-0.04,+0.21]  +0.050  t= 0.78  [-0.07,+0.17]
 
 READ THAT TWICE. Whether the tight stop is "significantly loss-making" or
-merely "bad" depends entirely on one assumption: how much you lose to
-slippage. At 0.05% a side it is significant; at zero it is not. Nothing in
-the data settles it, so this script prints BOTH columns every run rather
-than picking one and hiding the choice. Zero slippage is not achievable -
-you cross a real spread on a stock that just gapped - so the truth sits
-nearer the right-hand column, but "nearer" is doing work there.
+merely "bad" depends on one assumption: how much you lose to slippage. At
+0.05% a side it is significant (t = -3.21); at zero it is not (the interval
+touches +0.01). Nothing in the data settles it, so this script prints BOTH
+columns every run rather than picking one and hiding the choice. Zero
+slippage is not achievable - you cross a real spread on a stock that just
+gapped - so the truth sits nearer the right-hand column.
 
-What both columns agree on: the 0.10 ATR stop from the US paper loses
-money on NSE, and widening it to 0.50 removes the bleed without creating
-an edge - every confidence interval still contains zero.
+What both columns agree on: the 0.10 ATR stop from the US paper loses money
+on NSE, and widening it to 0.50 removes the bleed without creating an edge -
+every positive interval still contains zero.
+
+How far these trades actually travel, measured at the 0.50 ATR stop:
+0.5 ATR reached on 38.2%, 1 ATR on 18.0%, 1.5 ATR on 7.9%, 2.5 ATR on 3.4%.
+That is what a target has to live inside.
 
 HONEST LIMITS
   * ~60 sessions of 5-minute data is all Yahoo gives. One market window.

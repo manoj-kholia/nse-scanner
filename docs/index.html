@@ -10,7 +10,7 @@
   img{max-width:100%}
   [hidden]{display:none!important}
 </style>
-<meta name="build" content="2026-09-23-3">
+<meta name="build" content="2026-09-23-4">
   <title>NSE Base Scanner</title>
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Archivo:wght@500;600;700&family=IBM+Plex+Mono:wght@400;500;600&family=IBM+Plex+Sans:wght@400;500;600&display=swap">
@@ -264,6 +264,11 @@
   .ptest tr.bad td{color:var(--neg)}
   .ptest tr.now td{color:var(--ink); font-weight:600}
   .ptest em{font-style:normal; color:var(--accent); font-weight:600}
+  .ptest th.grp{text-align:center; padding-bottom:1px}
+  .ptest td.sep, .ptest th.sep{border-left:1px solid var(--line); padding-left:12px}
+  /* six nowrap columns are wider than a phone. Let the TABLE scroll rather
+     than the page - a sideways-scrolling page makes the rest unreadable. */
+  .pscroll{overflow-x:auto; -webkit-overflow-scrolling:touch; max-width:100%}
   .playstatus{
     margin-top:12px; padding:12px 15px; border-radius:12px; font-size:12.5px;
     line-height:1.6; background:var(--surface); border:1px solid var(--line);
@@ -369,21 +374,47 @@
   <div id="marketBox" hidden></div>
   <div id="playNote" class="playnote">
     <strong>Tested on your own stocks. It has no demonstrated edge.</strong>
-    177 triggered setups across 50 liquid NSE names over 60 sessions
-    (<code>backtest_orb.py</code>, 23 Sep 2026), exiting at the close:
+    179 trades from 248 qualifying days across 50 liquid NSE names over 60 sessions
+    (<code>backtest_orb.py</code>, 23 Sep 2026), exiting at the close. Average R per
+    trade, net of costs:
+    <div class="pscroll">
     <table class="ptest">
-      <tr><th>Stop</th><th>Stopped out</th><th>Costs</th><th>Avg R</th><th>95% CI</th></tr>
-      <tr class="bad"><td>0.10 ATR</td><td>90%</td><td>0.72R</td><td>&minus;0.759</td><td>[&minus;1.35, &minus;0.17]</td></tr>
-      <tr class="now"><td>0.50 ATR <em>(now used)</em></td><td>34%</td><td>0.14R</td><td>+0.078</td><td>[&minus;0.14, +0.29]</td></tr>
-      <tr><td>1.00 ATR</td><td>7%</td><td>0.07R</td><td>+0.023</td><td>&mdash;</td></tr>
+      <tr>
+        <th></th><th></th>
+        <th class="grp sep" colspan="2">Fees only (0.082%)</th>
+        <th class="grp sep" colspan="2">Fees + slippage (0.182%)</th>
+      </tr>
+      <tr>
+        <th>Stop</th><th>Stopped out</th>
+        <th class="sep">Avg R</th><th>95% CI</th>
+        <th class="sep">Avg R</th><th>95% CI</th>
+      </tr>
+      <tr class="bad">
+        <td>0.10 ATR</td><td>93%</td>
+        <td class="sep">&minus;0.544</td><td>[&minus;1.10, +0.01]</td>
+        <td class="sep">&minus;0.905</td><td>[&minus;1.46, &minus;0.35]</td>
+      </tr>
+      <tr class="now">
+        <td>0.50 ATR <em>(now used)</em></td><td>33%</td>
+        <td class="sep">+0.204</td><td>[&minus;0.03, +0.44]</td>
+        <td class="sep">+0.132</td><td>[&minus;0.10, +0.37]</td>
+      </tr>
+      <tr>
+        <td>1.00 ATR</td><td>8%</td>
+        <td class="sep">+0.086</td><td>[&minus;0.04, +0.21]</td>
+        <td class="sep">+0.050</td><td>[&minus;0.07, +0.17]</td>
+      </tr>
     </table>
-    The 0.10-ATR stop the US research uses is <b>significantly negative here</b> &mdash; on a
-    3%-ATR stock it is only ~0.3% wide, barely more than the 0.183% round trip, so fees ate
-    most of the risk budget. Widening it stops the bleeding but the confidence interval still
-    <b>crosses zero: no edge was demonstrated</b>. Only 5.6% of trades ever reached 1 ATR, so a
-    1-ATR target is hit about one day in eighteen.
-    Costs exclude slippage, so the real numbers are worse. SEBI, July 2024: 71% of individual
-    intraday traders in the equity cash segment lost money.
+    </div>
+    The 0.10-ATR stop the US research uses <b>loses money on both cost assumptions</b> &mdash;
+    on a 3%-ATR stock it is only ~0.3% wide, so fees ate most of the risk budget. Whether it
+    is <i>significantly</i> negative depends on slippage, which is an assumption rather than a
+    fee, so both columns are shown instead of one. Widening the stop removes the bleed, but
+    <b>every positive interval still crosses zero: no edge was demonstrated</b>.
+    At the 0.50 stop, 38% of trades reached 0.5 ATR of favourable movement and only
+    <b>18% ever reached 1 ATR</b> &mdash; about one day in five &mdash; which is the ceiling a
+    target has to live under. SEBI, July 2024: 71% of individual intraday traders in the
+    equity cash segment lost money.
     <b>Treat this as a watchlist and paper-trade it. Nothing here justifies real money.</b>
   </div>
   <div id="playStatus" class="playstatus" hidden></div>
@@ -477,7 +508,7 @@ let view = "watch";
 let sort = {key:"sc", dir:-1};
 const VOL_STEPS = [0,10000,25000,50000,100000,200000,300000,500000,750000,1e6,1.5e6,2e6,3e6,5e6,7.5e6,1e7,1.5e7,2e7,3e7,5e7,1e8];
 
-const BUILD = "2026-09-23-3";
+const BUILD = "2026-09-23-4";
 const $ = id => document.getElementById(id);
 
 // ---------- formatting ----------

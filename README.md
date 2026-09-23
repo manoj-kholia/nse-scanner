@@ -174,27 +174,37 @@ to have closed before the run, hence 09:27.
 
 ### It was tested here, and it has no demonstrated edge
 
-`backtest_orb.py` runs the whole thing on your own universe. Measured
-23 Sep 2026 — 50 liquid NSE names, 60 sessions, **177 triggered setups**,
+`backtest_orb.py` runs the whole thing on your own universe. Run it yourself
+from the **Actions → Backtest the opening-range breakout → Run workflow**; the
+table lands in the run summary. Measured 23 Sep 2026 — 50 liquid NSE names,
+60 sessions, 248 qualifying days of which 72% triggered (**179 trades**),
 exiting at the close:
 
-| Stop | Stopped out | Costs | Avg R | t | 95% CI |
+| Stop | Stopped out | Fees only: Avg R | 95% CI | + slippage: Avg R | 95% CI |
 |---|---|---|---|---|---|
-| **0.10 ATR** *(the US paper's)* | 90% | **0.72R** | **−0.759** | −2.53 | [−1.35, −0.17] |
-| 0.25 ATR | 64% | 0.29R | −0.018 | | |
-| **0.50 ATR** *(now the default)* | 34% | 0.14R | +0.078 | 0.72 | [−0.14, +0.29] |
-| 0.75 ATR | 17% | 0.10R | +0.030 | | |
-| 1.00 ATR | 7% | 0.07R | +0.023 | | |
+| **0.10 ATR** *(the US paper's)* | 93% | **−0.544** | [−1.10, +0.01] | **−0.905** | [−1.46, −0.35] |
+| 0.25 ATR | 64% | +0.174 | [−0.20, +0.55] | +0.029 | [−0.35, +0.40] |
+| **0.50 ATR** *(now the default)* | 33% | +0.204 | [−0.03, +0.44] | +0.132 | [−0.10, +0.37] |
+| 0.75 ATR | 17% | +0.125 | [−0.04, +0.29] | +0.076 | [−0.09, +0.24] |
+| 1.00 ATR | 8% | +0.086 | [−0.04, +0.21] | +0.050 | [−0.07, +0.17] |
 
-The 0.10-ATR stop is **significantly negative**. On a 3%-ATR NSE stock it is
-only ~0.3% wide, barely more than the 0.183% round trip, so fees ate most of
-the risk budget before the trade had a chance. Widening it removes the bleed,
-but the confidence interval still **crosses zero — no edge was demonstrated**.
+**Two columns, on purpose.** The left one counts brokerage and taxes only
+(0.082% round trip); the right adds 0.05% a side of assumed slippage (0.182%).
+Slippage is a guess, not a fee, and the guess decides whether the tight stop is
+merely bad (t = −1.93, interval touching zero) or significantly loss-making
+(t = −3.21). Hiding that inside a default would be the whole problem, so the
+script prints both every run. You cannot actually trade at zero slippage —
+you cross a real spread on a stock that just gapped — so the truth sits nearer
+the right-hand column.
 
-Only **5.6%** of triggered trades ever reached 1 ATR, so a 1-ATR target is hit
-about one day in eighteen. Costs exclude slippage, so every number is
-optimistic. Re-run `backtest_orb.py` as sessions accumulate and see whether
-that changes; treat the tab as a watchlist until it does.
+On a 3%-ATR NSE stock the 0.10 stop is only ~0.3% wide, so fees ate most of the
+risk budget before the trade had a chance. Widening it removes the bleed, but
+**every positive interval still crosses zero — no edge was demonstrated**.
+
+How far these trades travel, at the 0.50 stop: 0.5 ATR reached on **38%**,
+1 ATR on **18%**, 1.5 ATR on 7.9%, 2.5 ATR on 3.4%. That is the ceiling any
+target has to live under. Re-run the workflow as sessions accumulate and see
+whether it changes; treat the tab as a watchlist until it does.
 
 **Read this before using it.** Zarattini, Barbon and Aziz tested a 5-minute
 opening range breakout on 7,000+ US stocks, 2016-2023. Unfiltered it returned
