@@ -160,9 +160,17 @@ rather than an invented percentage. Nothing is dropped for missing data;
 
 ## The intraday side (separate, and much weaker evidence)
 
-`intraday.py` runs at **09:20 IST** each weekday and produces a *stocks in play*
+`intraday.py` runs at **09:27 IST** each weekday and produces a *stocks in play*
 shortlist: the liquid names that opened on abnormal volume with a real gap.
 `build_intraday.py` publishes it to the **In Play** tab.
+
+**Why 09:27 and not 09:20.** Yahoo rewrites the 09:15-09:20 bar's volume to
+**zero** once a session becomes history, while today's live 09:15 bar carries
+its real number. Reading that bar compares today against a history of zeros and
+rejects everything — which is exactly what happened on the first live runs. So
+price comes from the 09:15 bar (reliable) and volume from the **09:20-09:25**
+window, selected by clock time so a missing bar cannot shift it. That bar has
+to have closed before the run, hence 09:27.
 
 **Read this before using it.** Zarattini, Barbon and Aziz tested a 5-minute
 opening range breakout on 7,000+ US stocks, 2016-2023. Unfiltered it returned
@@ -195,6 +203,32 @@ what the round trip costs, and what share of a normal day's range that eats.
 Settings live in the `P` dict at the top of `intraday.py`; broker rates live at
 the top of `trading_costs.py` and **should be checked against your own contract
 note**, because if your rates are higher every number here is optimistic.
+
+## The trade journal
+
+The **Journal** tab logs what you actually did, and works out what it actually
+cost. Add a trade and it computes gross, the real charges (brokerage, STT,
+exchange, stamp duty, GST), net, and **R** — net divided by the money truly at
+risk, which is the stop distance *plus* costs. Sizing off the stop alone
+understates every loss; on a typical signal the costs are around 60% of the
+intended risk again.
+
+One deliberate difference from the screen: **no slippage is added here.** The
+In Play tab assumes 0.05% a side because it is guessing at a fill that has not
+happened. The journal uses the price you actually got, which already contains
+the slippage — adding it again would count it twice.
+
+The tile to watch is **Cost share**: costs as a percentage of gross profit.
+SEBI found profit-makers spent 19% of their gross profit on costs and
+loss-makers paid an extra 57% on top of their losses. If yours is drifting
+toward the second number, the trades are too small, too frequent, or both.
+
+On the In Play tab each row has a **log** button that jumps to the journal with
+the symbol, side, trigger and stop already filled from the opening range.
+
+Trades live in that browser's local storage — nothing is uploaded, and nothing
+syncs between your phone and your Mac. **Export CSV** is the backup and the way
+to move them across; **Import CSV** reads it back.
 
 ## Changing the rules
 

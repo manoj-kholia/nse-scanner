@@ -10,7 +10,7 @@
   img{max-width:100%}
   [hidden]{display:none!important}
 </style>
-<meta name="build" content="2026-09-22-6">
+<meta name="build" content="2026-09-23-1">
   <title>NSE Base Scanner</title>
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Archivo:wght@500;600;700&family=IBM+Plex+Mono:wght@400;500;600&family=IBM+Plex+Sans:wght@400;500;600&display=swap">
@@ -264,6 +264,42 @@
   }
   .playstatus.ok{border-left-color:var(--pos)}
   .playstatus b{color:var(--ink); display:block; margin-bottom:2px}
+  /* trade journal */
+  .jnote{
+    margin-top:16px; padding:12px 15px; border-radius:12px; font-size:12.5px; line-height:1.6;
+    background:var(--surface-2); border:1px solid var(--line); border-left:3px solid var(--accent);
+    color:var(--muted);
+  }
+  .jnote b{color:var(--ink)}
+  .jform{
+    margin-top:12px; padding:14px 15px; border-radius:12px;
+    background:var(--surface); border:1px solid var(--line); box-shadow:var(--shadow);
+    display:grid; gap:10px 12px;
+    grid-template-columns:repeat(auto-fit,minmax(118px,1fr));
+  }
+  .jform label{display:flex; flex-direction:column; gap:4px; font-size:11px; font-weight:600;
+               letter-spacing:.05em; text-transform:uppercase; color:var(--faint)}
+  .jform label.wide{grid-column:1/-1}
+  .jform input, .jform select{
+    font-family:var(--mono); font-size:13px; padding:7px 9px; border-radius:8px;
+    border:1px solid var(--line); background:var(--surface-2); color:var(--ink);
+    font-variant-numeric:tabular-nums; width:100%;
+  }
+  .jform input:focus, .jform select:focus{outline:2px solid var(--accent); outline-offset:1px}
+  .jbtns{grid-column:1/-1; display:flex; gap:8px; flex-wrap:wrap; align-items:center}
+  .jform button.primary{background:var(--accent); color:#fff; border-color:var(--accent)}
+  .jdel{
+    background:none; border:0; color:var(--faint); cursor:pointer; font-size:14px;
+    padding:2px 6px; border-radius:6px; line-height:1;
+  }
+  .jdel:hover{color:var(--neg); background:var(--surface-2)}
+  .jlog{
+    font-family:var(--sans); font-size:11px; font-weight:600; letter-spacing:.03em;
+    padding:3px 9px; border-radius:7px; cursor:pointer;
+    background:var(--accent-soft); color:var(--accent); border:1px solid transparent;
+  }
+  .jlog:hover{border-color:var(--accent)}
+  .rmult{font-family:var(--mono); font-weight:600; font-variant-numeric:tabular-nums}
   .rvol{font-family:var(--mono); font-weight:600; font-variant-numeric:tabular-nums}
   .rvol.hot{color:var(--accent)}
   .mono{font-family:var(--mono); font-variant-numeric:tabular-nums}
@@ -345,6 +381,34 @@
     <button class="tab" role="tab" id="tab-vol" aria-selected="false" data-view="vol">Volume Surge <span class="cnt" id="c-vol"></span></button>
     <button class="tab" role="tab" id="tab-sig" aria-selected="false" data-view="sig">Cup &amp; Handle <span class="cnt" id="c-sig"></span></button>
     <button class="tab" role="tab" id="tab-play" aria-selected="false" data-view="play">In Play <span class="cnt" id="c-play"></span></button>
+    <button class="tab" role="tab" id="tab-log" aria-selected="false" data-view="log">Journal <span class="cnt" id="c-log"></span></button>
+  </div>
+
+  <div id="journal" hidden>
+    <div class="jnote">
+      <b>Log every trade, on paper first.</b>
+      Costs here are the real charges on your actual fills &mdash; brokerage, STT, exchange,
+      stamp duty and GST. Slippage is <em>not</em> added on top, because the prices you enter
+      already contain it. <b>Cost share</b> is the number to watch: SEBI found profit-makers
+      spent 19% of their gross profit on costs and loss-makers paid an extra 57% on top of
+      their losses. Nothing here leaves your browser.
+    </div>
+    <form class="jform" id="jform" autocomplete="off">
+      <label>Date<input type="date" id="jDate" required></label>
+      <label>Symbol<input type="text" id="jSym" placeholder="BANDHANBNK" required></label>
+      <label>Side<select id="jSide"><option value="L">Long</option><option value="S">Short</option></select></label>
+      <label>Qty<input type="number" id="jQty" min="1" step="1" required></label>
+      <label>Entry<input type="number" id="jEntry" min="0" step="0.01" required></label>
+      <label>Stop<input type="number" id="jStop" min="0" step="0.01" placeholder="optional"></label>
+      <label>Exit<input type="number" id="jExit" min="0" step="0.01" required></label>
+      <label class="wide">Note<input type="text" id="jNote" placeholder="what you saw, what you'd do differently"></label>
+      <div class="jbtns">
+        <button type="submit" class="primary">Add trade</button>
+        <button type="button" id="jExport">Export CSV</button>
+        <button type="button" id="jImport">Import CSV</button>
+        <input type="file" id="jFile" accept=".csv" hidden>
+      </div>
+    </form>
   </div>
 
   <div class="filters" id="filters">
@@ -391,11 +455,12 @@ let sigs = [];                 // cup & handle signals
 let play = [];                 // this morning's stocks in play (intraday)
 let playNote = "";
 let playStatus = null;
+let trades = [];               // the journal, kept in this browser only
 let view = "watch";
 let sort = {key:"sc", dir:-1};
 const VOL_STEPS = [0,10000,25000,50000,100000,200000,300000,500000,750000,1e6,1.5e6,2e6,3e6,5e6,7.5e6,1e7,1.5e7,2e7,3e7,5e7,1e8];
 
-const BUILD = "2026-09-22-6";
+const BUILD = "2026-09-23-1";
 const $ = id => document.getElementById(id);
 
 // ---------- formatting ----------
@@ -409,6 +474,54 @@ function vol(n){
 const pct = n => n == null ? "–" : (n > 0 ? "+" : "") + n.toFixed(2) + "%";
 const sgn = n => n == null ? "" : (n > 0 ? "pos" : n < 0 ? "neg" : "");
 const tv = s => "https://www.tradingview.com/chart/?symbol=NSE:" + encodeURIComponent(s);
+
+// ---------- what a real intraday round trip costs ----------
+// Ported from trading_costs.py so the journal and the screen agree. The one
+// deliberate difference: NO slippage assumption. The screen adds 0.05% a side
+// because it is guessing at a fill that has not happened; here you type the
+// fill you actually got, so the slippage is already inside the price. Adding
+// it again would count it twice.
+const RATES = {
+  brokeragePct: 0.0003, brokerageCap: 20, sttSell: 0.00025,
+  exchange: 0.0000297, sebi: 0.000001, stampBuy: 0.00003, gst: 0.18
+};
+function tradeCosts(entry, exitPx, qty, side){
+  const buy  = (side === "L" ? entry : exitPx) * qty;
+  const sell = (side === "L" ? exitPx : entry) * qty;
+  const turn = buy + sell;
+  const brokerage = Math.min(buy * RATES.brokeragePct, RATES.brokerageCap)
+                  + Math.min(sell * RATES.brokeragePct, RATES.brokerageCap);
+  const stt = sell * RATES.sttSell;
+  const exch = turn * RATES.exchange;
+  const sebi = turn * RATES.sebi;
+  const stamp = buy * RATES.stampBuy;
+  const gst = (brokerage + exch + sebi) * RATES.gst;
+  return brokerage + stt + exch + sebi + stamp + gst;
+}
+
+function computeTrade(t){
+  const gross = (t.exit - t.entry) * t.qty * (t.side === "L" ? 1 : -1);
+  const costs = tradeCosts(t.entry, t.exit, t.qty, t.side);
+  const net = gross - costs;
+  // R is the money truly at risk: the stop distance PLUS the costs you were
+  // always going to pay. Sizing off the stop alone understates every loss.
+  let risk = null, r = null;
+  if(t.stop != null && t.stop > 0){
+    risk = Math.abs(t.entry - t.stop) * t.qty + costs;
+    if(risk > 0) r = net / risk;
+  }
+  return Object.assign({}, t, {gross, costs, net, risk, r});
+}
+
+function loadTrades(){
+  try{ trades = JSON.parse(localStorage.getItem("nse.trades") || "[]"); }
+  catch(e){ trades = []; }
+  if(!Array.isArray(trades)) trades = [];
+}
+function saveTrades(){
+  try{ localStorage.setItem("nse.trades", JSON.stringify(trades)); }
+  catch(e){ /* private window, or an origin without storage - stays in memory */ }
+}
 const esc = s => String(s == null ? "" : s).replace(/[&<>"]/g, m => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[m]));
 
 // ---------- CSV ----------
@@ -472,6 +585,16 @@ function loadSignals(recs){
 // ---------- filtering ----------
 function current(){
   if(view === "sig") return sigs.slice();
+  if(view === "log"){
+    const list = trades.map(computeTrade);
+    const k = sort.key, d = sort.dir;
+    return list.sort((a, b) => {
+      const x = a[k], y = b[k];
+      if(x == null) return 1; if(y == null) return -1;
+      if(typeof x === "string") return d * x.localeCompare(y);
+      return d * (x - y);
+    });
+  }
   if(view === "play"){
     const k = sort.key, d = sort.dir;
     return play.slice().sort((a, b) => {
@@ -543,7 +666,23 @@ const COLS_PLAY = [
   {k:"irisk",t:"Stop %"},
   {k:"be",   t:"Breakeven"},
   {k:"cva",  t:"Cost / ATR"},
-  {k:"to",   t:"Turnover"}
+  {k:"to",   t:"Turnover"},
+  {k:"logit",t:""}
+];
+
+const COLS_LOG = [
+  {k:"date",  t:"Date"},
+  {k:"sym",   t:"Symbol"},
+  {k:"side",  t:"Side"},
+  {k:"qty",   t:"Qty"},
+  {k:"entry", t:"Entry"},
+  {k:"exit",  t:"Exit"},
+  {k:"gross", t:"Gross"},
+  {k:"costs", t:"Costs"},
+  {k:"net",   t:"Net"},
+  {k:"r",     t:"R"},
+  {k:"note",  t:"Note"},
+  {k:"del",   t:""}
 ];
 
 function cell(r, k){
@@ -612,13 +751,29 @@ function cell(r, k){
     }
     case "o": case "orh": case "orl": case "ls": case "ss": case "pc": return inr(r[k]);
     case "to": return r.to == null ? "–" : "₹" + r.to.toFixed(0) + " cr";
+    case "logit": return '<button class="jlog" data-log="' + esc(r.s) + '" ' +
+      'title="Log a trade in this stock, prefilled from the opening range">log</button>';
+    case "date": return '<span class="mono">' + esc(r.date || "") + "</span>";
+    case "sym": return '<span class="sym"><a href="' + tv(r.sym) + '" target="_blank" rel="noopener">' + esc(r.sym) + "</a></span>";
+    case "side": return '<span class="pill ' + (r.side === "L" ? "brk" : "handle") + '">' + (r.side === "L" ? "LONG" : "SHORT") + "</span>";
+    case "qty": return '<span class="mono">' + (r.qty == null ? "\u2013" : r.qty.toLocaleString("en-IN")) + "</span>";
+    case "entry": case "exit": return inr(r[k]);
+    case "gross": case "net": return r[k] == null ? "\u2013" :
+      '<span class="' + sgn(r[k]) + ' mono">' + (r[k] >= 0 ? "+" : "\u2212") + inr(Math.abs(r[k])).slice(1) + "</span>";
+    case "costs": return r.costs == null ? "\u2013" : '<span class="mono">' + inr(r.costs) + "</span>";
+    case "r": return r.r == null ? "\u2013" :
+      '<span class="rmult ' + sgn(r.r) + '" title="Net divided by the money truly at risk: stop distance plus costs.">' +
+      (r.r >= 0 ? "+" : "\u2212") + Math.abs(r.r).toFixed(2) + "R</span>";
+    case "note": return '<span class="co">' + esc(r.note || "") + "</span>";
+    case "del": return '<button class="jdel" data-del="' + esc(r.id) + '" title="Delete this trade">\u00D7</button>';
     case "hdep": case "cdep": return r[k] == null ? "–" : r[k].toFixed(1) + "%";
     default: return r[k] == null ? "–" : r[k];
   }
 }
 
 function render(){
-  const cols = view === "sig" ? COLS_SIG : view === "play" ? COLS_PLAY : COLS_SCREEN;
+  const cols = view === "sig" ? COLS_SIG : view === "play" ? COLS_PLAY
+             : view === "log" ? COLS_LOG : COLS_SCREEN;
   $("thead").innerHTML = cols.map(c =>
     '<th data-k="' + c.k + '">' + c.t + (sort.key === c.k ? ' <span class="arrow">' + (sort.dir < 0 ? "▼" : "▲") + "</span>" : "") + "</th>").join("");
   const list = current();
@@ -633,10 +788,14 @@ function render(){
       ? (playStatus && !playStatus.ok
           ? "<strong>The data failed, not the market</strong>See the note above &mdash; this is not a reading of today's open."
           : "<strong>Nothing in play</strong>No stock opened on abnormal volume with a real gap. A quiet open is not a reason to trade &mdash; this runs at 09:20 IST each weekday.")
+      : view === "log"
+      ? "<strong>No trades logged yet</strong>Add one above. Paper trades count &mdash; log 20 to 30 before risking money, and you will have a sample instead of a hope."
       : "<strong>Nothing matches these filters</strong>Widen the distance from the 20-week high, or lower the volume floor.";
   } else e.hidden = true;
 
-  $("filters").hidden = (view === "sig" || view === "play");
+  $("filters").hidden = (view === "sig" || view === "play" || view === "log");
+  $("journal").hidden = (view !== "log");
+  $("c-log").textContent = trades.length ? "(" + trades.length + ")" : "";
   $("playNote").hidden = (view !== "play");
   const ps = $("playStatus");
   if(view === "play" && playStatus){
@@ -718,6 +877,37 @@ function marketBanner(m){
 }
 
 function tiles(list){
+  if(view === "log"){
+    const t = trades.map(computeTrade);
+    const wins = t.filter(x => x.net > 0);
+    const gross = t.reduce((s,x) => s + Math.max(0, x.gross), 0);
+    const costs = t.reduce((s,x) => s + x.costs, 0);
+    const net = t.reduce((s,x) => s + x.net, 0);
+    const withR = t.filter(x => x.r != null);
+    const avgR = withR.length ? withR.reduce((s,x) => s + x.r, 0) / withR.length : null;
+    // SEBI's framing: profit-makers spent 19% of gross profit on costs,
+    // loss-makers paid an extra 57% on top of their losses.
+    const share = gross > 0 ? (costs / gross * 100) : null;
+    const t2 = [
+      ["Trades", t.length, wins.length + " won \u00B7 " + (t.length - wins.length) + " lost"],
+      ["Win rate", t.length ? Math.round(wins.length / t.length * 100) + "%" : "\u2013",
+       "a low rate is normal \u2014 the research variant won 24%"],
+      ["Net after costs", '<span class="' + sgn(net) + '">' +
+       (net >= 0 ? "+" : "\u2212") + inr(Math.abs(net)).slice(1) + "</span>",
+       inr(costs) + " paid in charges"],
+      ["Cost share", share == null ? "\u2013" : share.toFixed(0) + "%",
+       "of gross profit \u2014 SEBI: 19% for winners, 57%+ for losers"]
+    ];
+    $("tiles").innerHTML = t2.map(([k, n, d]) =>
+      '<div class="tile"><div class="k">' + k + '</div><div class="n">' + n + '</div><div class="d">' + d + "</div></div>").join("");
+    if(avgR != null){
+      $("tiles").insertAdjacentHTML("beforeend",
+        '<div class="tile"><div class="k">Average R</div><div class="n ' + sgn(avgR) + '">' +
+        (avgR >= 0 ? "+" : "\u2212") + Math.abs(avgR).toFixed(2) + 'R</div>' +
+        '<div class="d">expectancy per trade, risk-adjusted</div></div>');
+    }
+    return;
+  }
   if(view === "play"){
     // the screen tiles describe the delivery watchlist and mean nothing here
     const hot = play.filter(r => (r.rv ?? 0) >= 5).length;
@@ -757,6 +947,7 @@ document.querySelectorAll(".tab").forEach(b => b.addEventListener("click", () =>
   view = b.dataset.view;
   sort = view === "sig"  ? {key:"toBuy", dir:1}
        : view === "play" ? {key:"rv", dir:-1}
+       : view === "log"  ? {key:"date", dir:-1}
        : {key:"sc", dir:-1};
   render();
 }));
@@ -861,6 +1052,98 @@ async function boot(){
   }catch(e){}
   render();
 }
+
+// ---------- journal wiring ----------
+// `num` and `parseCSV` are already defined above, next to the CSV drop-loader.
+$("jform").addEventListener("submit", e => {
+  e.preventDefault();
+  const t = {
+    id: String(Date.now()) + Math.random().toString(36).slice(2, 6),
+    date: $("jDate").value,
+    sym: $("jSym").value.trim().toUpperCase(),
+    side: $("jSide").value,
+    qty: num($("jQty").value),
+    entry: num($("jEntry").value),
+    stop: num($("jStop").value),
+    exit: num($("jExit").value),
+    note: $("jNote").value.trim()
+  };
+  if(!t.sym || !t.qty || !t.entry || !t.exit) return;
+  trades.push(t); saveTrades();
+  ["jQty","jEntry","jStop","jExit","jNote"].forEach(id => $(id).value = "");
+  $("jSym").value = ""; $("jSym").focus();
+  render();
+});
+
+$("tbody").addEventListener("click", e => {
+  const lg = e.target.closest("[data-log]");
+  if(lg){
+    // carry the plan across so the numbers you log are the ones the screen gave
+    const row = play.find(x => x.s === lg.dataset.log);
+    view = "log";
+    document.querySelectorAll(".tab").forEach(x =>
+      x.setAttribute("aria-selected", String(x.dataset.view === "log")));
+    sort = {key:"date", dir:-1};
+    render();
+    if(row){
+      const up = (row.gap ?? 0) >= 0;
+      $("jSym").value = row.s;
+      $("jSide").value = up ? "L" : "S";
+      $("jEntry").value = (up ? row.orh : row.orl) ?? "";
+      $("jStop").value  = (up ? row.ls : row.ss) ?? "";
+      $("jQty").focus();
+    }
+    return;
+  }
+  const b = e.target.closest("[data-del]"); if(!b) return;
+  trades = trades.filter(t => t.id !== b.dataset.del);
+  saveTrades(); render();
+});
+
+const JCOLS = ["date","sym","side","qty","entry","stop","exit","note"];
+$("jExport").addEventListener("click", () => {
+  const rowsOut = trades.map(computeTrade);
+  const head = JCOLS.concat(["gross","costs","net","r"]);
+  const body = rowsOut.map(t => head.map(k => {
+    const v = t[k];
+    if(v == null) return "";
+    const s = typeof v === "number" ? (k === "r" ? v.toFixed(3) : v.toFixed(2)) : String(v);
+    return /[",\n]/.test(s) ? '"' + s.replace(/"/g, '""') + '"' : s;
+  }).join(","));
+  const blob = new Blob([head.join(",") + "\n" + body.join("\n")], {type:"text/csv"});
+  const a = document.createElement("a");
+  a.href = URL.createObjectURL(blob);
+  a.download = "trade_journal_" + new Date().toISOString().slice(0,10) + ".csv";
+  a.click(); URL.revokeObjectURL(a.href);
+});
+
+$("jImport").addEventListener("click", () => $("jFile").click());
+$("jFile").addEventListener("change", e => {
+  const f = e.target.files && e.target.files[0]; if(!f) return;
+  const rd = new FileReader();
+  rd.onload = () => {
+    try{
+      const recs = parseCSV(String(rd.result));
+      let added = 0;
+      recs.forEach(r => {
+        const t = {
+          id: String(Date.now()) + Math.random().toString(36).slice(2, 6),
+          date: r.date || "", sym: (r.sym || "").toUpperCase(),
+          side: (r.side || "L").toUpperCase().startsWith("S") ? "S" : "L",
+          qty: num(r.qty), entry: num(r.entry), stop: num(r.stop),
+          exit: num(r.exit), note: r.note || ""
+        };
+        if(t.sym && t.qty && t.entry && t.exit){ trades.push(t); added++; }
+      });
+      saveTrades(); render();
+    }catch(err){ /* a malformed file should not wipe the journal */ }
+    e.target.value = "";
+  };
+  rd.readAsText(f);
+});
+
+loadTrades();
+try{ $("jDate").valueAsDate = new Date(); }catch(e){}
 boot();
 
 // ---------- keep the page shell fresh ----------
