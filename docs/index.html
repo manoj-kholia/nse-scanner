@@ -10,7 +10,7 @@
   img{max-width:100%}
   [hidden]{display:none!important}
 </style>
-<meta name="build" content="2026-09-23-2">
+<meta name="build" content="2026-09-23-3">
   <title>NSE Base Scanner</title>
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Archivo:wght@500;600;700&family=IBM+Plex+Mono:wght@400;500;600&family=IBM+Plex+Sans:wght@400;500;600&display=swap">
@@ -468,14 +468,16 @@ const SAMPLE = [{"s":"STLNETWORK","n":"STL Networks Limited","p":47.34,"c":10.22
 let rows = SAMPLE.slice();     // screened stocks
 let sigs = [];                 // cup & handle signals
 let play = [];                 // this morning's stocks in play (intraday)
-let playNote = "";
+// the In Play caveat is written into #playNote in the markup above, not
+// carried in the data - it states a measured result and must not be
+// silently replaced by whatever a build script happens to put in `note`.
 let playStatus = null;
 let trades = [];               // the journal, kept in this browser only
 let view = "watch";
 let sort = {key:"sc", dir:-1};
 const VOL_STEPS = [0,10000,25000,50000,100000,200000,300000,500000,750000,1e6,1.5e6,2e6,3e6,5e6,7.5e6,1e7,1.5e7,2e7,3e7,5e7,1e8];
 
-const BUILD = "2026-09-23-2";
+const BUILD = "2026-09-23-3";
 const $ = id => document.getElementById(id);
 
 // ---------- formatting ----------
@@ -1061,7 +1063,6 @@ async function boot(){
     if(r2.ok){
       const p = await r2.json();
       if(Array.isArray(p.inPlay)) play = p.inPlay;
-      if(p.note) playNote = p.note;
       if(p.status) playStatus = p.status;
     }
   }catch(e){}
