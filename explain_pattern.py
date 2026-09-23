@@ -171,9 +171,9 @@ def explain(sym, df, live, min_rs=80):
     print("\n  STEP 4 - what the scanner concludes")
     res, reason = fp.evaluate(df, cup)
     if res:
-        print(f"    LISTED as {res.get('Signal', 'a signal')}: "
+        print(f"    LISTED as {res.get('Stage', 'a signal')}: "
               f"buy {res['Buy_Point']}, last {res['Last_Price']}, "
-              f"{res.get('Pct_To_Buy', '')}% to go")
+              f"stage {res.get('Base_Stage')}, target {res.get('Target')}")
     else:
         print(f"    NOT LISTED - {reason}")
         print(f"    (last {px:.2f}, buy point {buy:.2f}, "
