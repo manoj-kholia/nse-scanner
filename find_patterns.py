@@ -43,18 +43,36 @@ P = dict(
     rim_down=0.08,       # right rim may sit this far BELOW the left rim
     rim_up=0.05,         # ...or this far above
     pierce=0.02,         # bars inside the cup may poke above the rim by this
-    # Share of cup bars sitting in the bottom third of the cup's range.
-    # Measured scores: sharp spike V-bottom 0.04, straight-line wide V 0.33,
-    # rounded U 0.38.  So 0.30 decisively rejects the sharp V-bottoms O'Neil
-    # warns about. It does NOT separate a wide gentle V from a U - those two
-    # score too close together for any threshold to split them honestly.
-    round_min=0.30,
+    # MEAN NORMALISED DEPTH of the closes across the cup, not a count.
+    #   shape = mean( (rim_high - close) / (rim_high - cup_low) )
+    # A U spends most of its bars near the bottom, so the mean depth is high;
+    # a V passes through the bottom once, so it is lower.
+    #
+    # This replaced a count of closes sitting in the bottom third. A count is
+    # discontinuous: one bar moving a rupee across the line moved the old score
+    # by 1/length. SPLPETRO scored 0.32 in this scanner and 0.27 on the
+    # TradingView script against a 0.30 cutoff - same cup, same rims, same low
+    # to the paisa - purely because two closes near the line landed on opposite
+    # sides in two data feeds. Nothing is counted now, so nothing can tip over.
+    #
+    # Measured on reference shapes (calibrate_shape.py):
+    #   sharp spike V 0.05, late V 0.33, wide straight V 0.49,
+    #   rounded U 0.51, flat saucer 0.76
+    # and under per-bar jitter the score moves at most 0.002, against 0.033 for
+    # the old count. 0.41 sits in the band (0.332, 0.492) that reproduces every
+    # accept/reject the old 0.30 cutoff made.
+    #
+    # It still does NOT separate a wide gentle V (0.49) from a U (0.51). Those
+    # two are 0.016 apart and no threshold splits them honestly. Look at the
+    # chart when the score lands near 0.50.
+    round_min=0.41,
     prior_pct=0.25,      # advance required before the base
     prior_look=120,
     handle_min=5,        # 1 week minimum
     handle_max=35,
     handle_depth=0.12,   # O'Neil's normal range tops out around 12%
     handle_slope=0.0,    # max % per day drift; a handle must NOT wedge upward
+    handle_slope_t=1.0,  # ...and the rise must beat its own standard error
     handle_vol=1.0,      # handle volume must dry up: at or below the 50d average
     vol_mult=1.4,
     vol_len=50,
@@ -134,9 +152,12 @@ def find_cup(df, p=P, why=None):
                 no(f"cup low sits at {pos:.2f} of the way across (needs 0.15-0.85)")
                 continue
 
-            third = cup_low + (rim_hi - cup_low) / 3
-            if (close[inside] <= third).sum() / length < p["round_min"]:
-                no("V-shaped, not rounded enough")
+            span = rim_hi - cup_low
+            if span <= 0:
+                continue
+            shape = float(np.mean((rim_hi - close[inside]) / span))
+            if shape < p["round_min"]:
+                no(f"V-shaped: shape {shape:.3f} below {p['round_min']:.2f}")
                 continue
 
             if p["prior_pct"] > 0:
@@ -162,17 +183,41 @@ def handle_quality(close, vol, avg_vol, start, end, buy, p=P):
               handle is distribution, not a pause.
 
     `end` excludes the breakout bar itself, whose price and volume both spike.
-    Returns (slope_pct_per_day, volume_vs_average) or (None, None) if the
-    handle is too short to judge.
+    Returns (slope_pct_per_day, volume_vs_average, slope_t) or three Nones if
+    the handle is too short to judge. slope_t is the slope over its own standard
+    error - how much of the drift is signal rather than scatter.
     """
     if end - start < 3:
-        return None, None
+        return None, None, None
     y = close[start:end]
     x = np.arange(len(y), dtype=float)
-    slope = float(np.polyfit(x, y, 1)[0]) / buy * 100 if buy else 0.0
+    n = len(y)
+    sxx = float(((x - x.mean()) ** 2).sum())
+    sxy = float(((x - x.mean()) * (y - y.mean())).sum())
+    raw = sxy / sxx if sxx else 0.0
+    slope = raw / buy * 100 if buy else 0.0
+
+    # How sure are we that the handle rises at all?  A slope of +0.18%/day means
+    # nothing on its own: on a choppy handle that is well inside the noise. The
+    # scanner and the chart read two different feeds, and a couple of rupees on
+    # a couple of bars was enough to flip the SIGN of this number on MCX and
+    # SOMANYCERA - and with it the verdict. So the gate now asks whether the
+    # rise is bigger than its own standard error, not merely whether it is
+    # positive. t below 1 means "flat, within noise".
+    syy = float(((y - y.mean()) ** 2).sum())
+    sse = max(syy - raw * sxy, 0.0)
+    tstat = None
+    if n > 2 and sxx > 0 and sse > 0:
+        se = (sse / ((n - 2) * sxx)) ** 0.5
+        tstat = raw / se if se else None
+    elif n > 2 and sse == 0:
+        tstat = 0.0                      # a perfectly straight handle, no scatter
+
     ref = avg_vol[end - 1]
     dry = float(vol[start:end].mean()) / ref if ref and not np.isnan(ref) else None
-    return round(slope, 3), (round(dry, 2) if dry is not None else None)
+    return (round(slope, 3),
+            (round(dry, 2) if dry is not None else None),
+            (round(tstat, 2) if tstat is not None else None))
 
 
 def base_stage(df, reset_dd=0.30, min_pullback=0.12, min_base=25):
@@ -315,8 +360,11 @@ def evaluate(df, cup, p=P, breakout_window=5):
         return None, "base under 7 weeks"
 
     h_end = bo if bo is not None else n        # exclude the breakout bar
-    slope, dry = handle_quality(close, vol, avg_vol, ri + 1, h_end, buy, p)
-    if slope is not None and slope > p["handle_slope"]:
+    slope, dry, slope_t = handle_quality(close, vol, avg_vol, ri + 1, h_end, buy, p)
+    # Wedging upward now needs BOTH: a rise, and a rise that stands out from the
+    # handle's own scatter. Either alone is a coin toss between two data feeds.
+    if (slope is not None and slope > p["handle_slope"]
+            and (slope_t is None or slope_t > p["handle_slope_t"])):
         return None, "handle wedges upward"
     if dry is not None and dry > p["handle_vol"]:
         return None, "no volume dry-up in handle"
@@ -333,6 +381,7 @@ def evaluate(df, cup, p=P, breakout_window=5):
         Handle_Depth_pct=round(h_depth * 100, 1),
         Handle_Days=int(days),
         Handle_Slope=slope,
+        Handle_Slope_t=slope_t,
         Handle_Vol=dry,
         Cup_Low=round(cup_low, 2),
         Target=round(buy + (buy - cup_low), 2),

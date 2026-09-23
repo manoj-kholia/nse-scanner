@@ -137,8 +137,8 @@ def explain(sym, df, live, min_rs=80):
     inside = slice(li + 1, rj)
     rim_hi = max(hi_a[li], hi_a[rj])
     cup_low = cup["cup_low"]
-    third = cup_low + (rim_hi - cup_low) / 3
-    roundness = float((cl_a[inside] <= third).sum()) / cup["length"]
+    span = rim_hi - cup_low
+    roundness = float(np.mean((rim_hi - cl_a[inside]) / span)) if span > 0 else 0.0
     lo_bar = li + 1 + int(np.argmin(lo_a[inside]))
     pos = (lo_bar - li) / cup["length"]
     start = max(0, li - fp.P["prior_look"])
@@ -146,12 +146,12 @@ def explain(sym, df, live, min_rs=80):
     advance = (hi_a[li] - prior_low) / prior_low * 100 if prior_low > 0 else float("nan")
 
     print("\n    what SHAPE is it?")
-    line(roundness >= fp.P["round_min"], "roundness (closes in the bottom third)",
-         f"{roundness:.2f}", f">= {fp.P['round_min']:.2f}")
-    print(f"          reference: sharp V-bottom 0.04, wide straight-line V 0.33,")
-    print(f"                     properly rounded U 0.38")
-    if roundness < 0.36:
-        print(f"          NOTE: {roundness:.2f} is in the band where this test cannot")
+    line(roundness >= fp.P["round_min"], "shape (mean depth of the closes)",
+         f"{roundness:.3f}", f">= {fp.P['round_min']:.2f}")
+    print(f"          reference: sharp spike V 0.05, late V 0.33,")
+    print(f"                     wide straight V 0.49, rounded U 0.51, saucer 0.76")
+    if 0.46 <= roundness <= 0.56:
+        print(f"          NOTE: {roundness:.3f} is in the band where this test cannot")
         print(f"                separate a wide V from a real U. Look at the chart.")
     line(0.15 <= pos <= 0.85, "low sits mid-cup, not at one end",
          f"{pos:.2f} across", "0.15-0.85")
@@ -173,7 +173,7 @@ def explain(sym, df, live, min_rs=80):
     # spurious "wedges upward" on every stock that has already broken out.
     bo = fp.breakout_index(df, cup, fp.P)
     h_end = bo if bo is not None else n
-    slope, dry = fp.handle_quality(close, vol, avg_vol, ri + 1, h_end, buy, fp.P)
+    slope, dry, slope_t = fp.handle_quality(close, vol, avg_vol, ri + 1, h_end, buy, fp.P)
     if bo is not None:
         print(f"    (broke out {last - bo} session(s) ago at bar {bo}; the handle")
         print(f"     is measured up to that bar, not through it)")
@@ -190,8 +190,15 @@ def explain(sym, df, live, min_rs=80):
     line(h_depth <= fp.P["handle_depth"], "handle depth",
          f"{h_depth*100:.1f}%", f"<= {fp.P['handle_depth']*100:.0f}%")
     if slope is not None:
-        line(slope <= fp.P["handle_slope"], "handle drifts DOWN, not up",
+        # The gate only bites when the rise also beats its own standard error,
+        # so a handle that is flat within noise is not called a wedge.
+        wedging = slope > fp.P["handle_slope"] and (
+            slope_t is None or slope_t > fp.P["handle_slope_t"])
+        line(not wedging, "handle drifts DOWN, not up",
              f"{slope:+.3f}%/day", f"<= {fp.P['handle_slope']:.1f}")
+        if slope_t is not None:
+            line(not wedging, "  ...and the rise beats its own noise",
+                 f"t {slope_t:+.2f}", f"<= {fp.P['handle_slope_t']:.1f} is flat")
     if dry is not None:
         line(dry <= fp.P["handle_vol"], "volume dried up in the handle",
              f"{dry:.2f}x avg", f"<= {fp.P['handle_vol']:.1f}x")

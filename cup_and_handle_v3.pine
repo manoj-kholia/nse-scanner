@@ -1,0 +1,497 @@
+//@version=6
+// ============================================================================
+//  CUP & HANDLE - O'Neil / MarketSmith rules
+//  v3.  Rewritten to agree, gate for gate, with find_patterns.py - the Python
+//  scanner behind the NSE dashboard. Daily chart, delivery trading.
+//
+//  WHY v3 EXISTS
+//  -------------
+//  v2 was a strategy, and it hid the three numbers you actually want:
+//      plot(inHandle ? buyPoint : na, ...)                  <- blank after breakout
+//      plot(strategy.position_size > 0 ? stopLvl : na, ...) <- blank with no position
+//  So the buy point vanished on the very bar it became actionable. v3 is an
+//  indicator: the levels are drawn whenever a base exists, breakout or not.
+//
+//  v2 also LATCHED. Once it entered a handle it stopped looking for cups
+//  ("if n > 0 and not inHandle"), so a stale base could sit on the chart for
+//  weeks. v3 re-derives the newest valid cup from scratch on the last bar,
+//  which is what the Python does on every run.
+//
+//  And v2 was missing four of the Python's gates entirely: the handle's
+//  downward drift, the handle's volume dry-up, the 7-week minimum for the
+//  whole base, and the depth ceiling at 35% rather than 40%.
+//
+//  WHAT IT STILL CANNOT MATCH  (read this before trusting a disagreement)
+//  ---------------------------------------------------------------------
+//  1. RS RATING. The dashboard only scans stocks whose RS Rating is 80+.
+//     That is a percentile rank of this stock against ~2,300 others, and Pine
+//     sees one symbol at a time. So this script WILL draw bases on stocks the
+//     dashboard filters out before the pattern code ever runs. That single
+//     gate is what moved SPLPETRO on and off the list between 22 and 23 Sep.
+//  2. DATA. The dashboard reads Yahoo; your chart reads TradingView's NSE
+//     feed. Expect the last decimal to differ, and occasionally a rupee.
+//  3. HISTORY. Base-stage counting depends on how far back you look. The
+//     Python feeds it two years. Set "History window" to match, or the stage
+//     number will not agree.
+//
+//  Educational tool. Not investment advice.
+// ============================================================================
+indicator("Cup and Handle - O'Neil (matches the NSE scanner)", "C&H v3",
+     overlay = true, max_bars_back = 1500, max_lines_count = 80, max_labels_count = 20)
+
+// --- rules. Defaults are find_patterns.py's P dict, value for value. --------
+gD = "0. Data"
+histBars = input.int(500,  "History window (bars) - the scanner uses 2 years", minval=250, maxval=1000, group=gD, tooltip="Base-stage counting walks this window. The Python scanner downloads period='2y', which is about 500 daily bars. Change this and the stage number will stop matching.")
+dropLive = input.bool(true, "Ignore the unfinished session", group=gD, tooltip="Volume is cumulative: mid-session a stock has only traded part of a day, so the 1.4x breakout test can almost never fire and the list flickers. The scanner drops the part-day bar before 15:30 IST. This does the same.")
+
+gP = "1. Prior uptrend"
+priorPct  = input.float(25.0, "Minimum prior advance %", group=gP) / 100
+priorLook = input.int(120,    "Bars to look back for that advance", minval=20, maxval=300, group=gP)
+
+gC = "2. Cup"
+pivLen    = input.int(5,      "Pivot strength (bars each side)", minval=2, maxval=20, group=gC)
+cupMin    = input.int(30,     "Min cup length (bars) - 30 = 6 weeks", minval=10, group=gC)
+cupMax    = input.int(250,    "Max cup length (bars) - 250 = 50 weeks", minval=20, maxval=325, group=gC)
+baseMin   = input.int(35,     "Min cup + handle together (bars) - 7 weeks", minval=10, group=gC)
+minDepth  = input.float(12.0, "Min cup depth %", group=gC) / 100
+maxDepth  = input.float(35.0, "Max cup depth %", group=gC) / 100
+rimDown   = input.float(8.0,  "Right rim may be this % BELOW left rim", group=gC) / 100
+rimUp     = input.float(5.0,  "Right rim may be this % ABOVE left rim", group=gC) / 100
+pierceTol = input.float(2.0,  "Bars inside cup may pierce the rim by %", group=gC) / 100
+minRound  = input.float(41.0, "Min shape score (mean depth of the closes)", group=gC, tooltip="mean( (rim high - close) / (rim high - cup low) ) across the cup. A U spends most of its bars near the bottom so the mean depth is high; a V passes through once. This replaced a COUNT of closes in the bottom third, which was discontinuous - one bar moving a rupee across the line moved the old score by 1/length, and that alone made this script and the scanner disagree about SPLPETRO (0.27 here vs 0.32 there, against a 0.30 cutoff, on a cup whose rims and low matched to the paisa). Measured: sharp spike V 0.05, late V 0.33, wide straight V 0.49, rounded U 0.51, flat saucer 0.76. Under per-bar jitter this moves at most 0.002 against 0.033 for the old count. It still cannot separate a wide V from a U - those are 0.016 apart - so look at the chart when the score lands near 0.50.") / 100
+
+gH = "3. Handle"
+handleMin   = input.int(5,      "Min handle length (bars) - 1 week", minval=1, group=gH)
+handleMax   = input.int(35,     "Max handle length (bars)", minval=2, group=gH)
+handleDepth = input.float(12.0, "Max handle depth %", group=gH) / 100
+handleSlope = input.float(0.0,  "Max handle drift, % per day", group=gH, tooltip="A proper handle drifts DOWN along a falling trendline. One that wedges upward means no shakeout happened, and those fail more often. 0.0 means it must not rise at all. This gate did not exist in v2.")
+handleVol   = input.float(1.0,  "Max handle volume, x the 50-day average", group=gH, tooltip="Volume must contract through the handle. Heavy volume in a handle is distribution, not a pause. This gate did not exist in v2.")
+handleSlopeT = input.float(1.0, "...and the rise must beat its own noise (t)", group=gH, tooltip="A slope of +0.18%/day means nothing on its own: on a choppy handle that is well inside the noise. The chart and the scanner read two different feeds, and a couple of rupees on a couple of bars flipped the SIGN of this number on MCX and SOMANYCERA - and with it the verdict. So a handle counts as wedging upward only when the rise also beats its own standard error. t below 1 means flat, within noise.")
+
+gB = "4. Breakout"
+volMult  = input.float(1.4, "Breakout volume x average", group=gB)
+volLen   = input.int(50,    "Volume average length", group=gB)
+maxExt   = input.float(5.0, "Never chase more than this % past the buy point", group=gB) / 100
+boWindow = input.int(5,     "Keep reporting a breakout for this many sessions", minval=1, maxval=20, group=gB)
+
+gX = "5. Stop"
+maxLoss = input.float(8.0, "O'Neil hard stop, % below your entry", group=gX, tooltip="The handle low is the structural level, and it is the right stop only when it is TIGHTER than 8%. When the handle is loose, a 'stop' at the handle low quietly commits you to a 10-12% loss.") / 100
+
+gV = "6. Display"
+showCup   = input.bool(true, "Draw the cup outline", group=gV)
+showTable = input.bool(true, "Show the gate-by-gate verdict", group=gV)
+tblPos    = input.string("top right", "Verdict position", options=["top right", "bottom right", "bottom left"], group=gV)
+
+// ----------------------------------------------------------------------------
+avgVol = ta.sma(volume, volLen)
+sma50  = ta.sma(close, 50)
+sma200 = ta.sma(close, 200)
+
+// Is the newest bar still being traded? barstate.isrealtime stays true after
+// the close, right up until the next session opens, so testing it alone leaves
+// the chart a full day behind the evening scan: the Python keeps today's bar
+// once the clock passes 15:30 IST, while the chart was still throwing it away
+// at 22:00. Comparing against the bar's own close time is the same test the
+// Python makes against MARKET_CLOSE.
+bool unfinished = barstate.isrealtime and timenow < time_close
+
+// Pivot highs, detected by hand rather than with ta.pivothigh().
+// ta.pivothigh() rejects TIES - a bar equal to its neighbour is not a pivot.
+// The Python uses `high[i] == high[i-piv : i+piv+1].max()`, which accepts them.
+// On an NSE small cap that locks at the upper circuit two days running, the
+// highs are identical to the paisa, and that one difference is enough to make
+// the two implementations pick different rims and disagree about everything
+// downstream. So: highest-or-equal, same as the Python.
+isPiv = true
+for k = 1 to pivLen
+    if high[pivLen - k] > high[pivLen] or high[pivLen + k] > high[pivLen]
+        isPiv := false
+        break
+ph = isPiv ? high[pivLen] : na
+
+// Every loop below works in ABSOLUTE bar numbers, the way the Python works in
+// array positions, so the two can be compared line by line. The lookups are
+// written inline as `high[bar_index - i]` rather than through a helper like
+//     src[bar_index - (i)] => src[bar_index - i]
+// because a user-defined function that history-references its argument keeps
+// its OWN copy of that series, built only on the bars where the function is
+// actually called. This block runs only on the last bar, so that copy holds a
+// single value and every lookback comes back na - silently, with no error.
+// The symptom was a verdict table reading "last 12 highs: 11:NaN ... 0:899.00"
+// while the data itself was perfectly fine. A direct reference to a built-in
+// series keeps its full history however the script is structured.
+
+var array<int>   pivBar   = array.new<int>()
+var array<float> pivPrice = array.new<float>()
+// On the live bar the pivot at bar_index-pivLen is still judged against an
+// unfinished high, so it is not registered - the same reason the scanner drops
+// the part-day bar.
+if not na(ph) and not (dropLive and unfinished)
+    array.push(pivBar,   bar_index - pivLen)
+    array.push(pivPrice, ph)
+    // Keep only the newest pivots, the way v2 did. On a chart carrying thirty
+    // years of history there are thousands of them, and walking the whole list
+    // on every recalculation stalls the script: it compiles, loads, and then
+    // silently draws nothing at all. 120 pivots covers roughly 600 bars, which
+    // is comfortably more than cupMax plus a full handle.
+    if array.size(pivBar) > 120
+        array.shift(pivBar)
+        array.shift(pivPrice)
+
+var line[]  cupLines = array.new<line>()
+var line[]  lvlLines = array.new<line>()
+var label[] tags     = array.new<label>()
+
+var table verdict = table.new(
+     tblPos == "top right" ? position.top_right : tblPos == "bottom right" ? position.bottom_right : position.bottom_left,
+     3, 22, border_width = 1)
+
+// Pine will not let a function be declared inside a local block, so the table
+// row helper lives out here and carries the row counter in and out.
+vrow(table t, int r, string k, string got, string need, bool ok) =>
+    table.cell(t, 0, r, k,    text_size = size.small, text_halign = text.align_left,  text_color = color.gray)
+    table.cell(t, 1, r, got,  text_size = size.small, text_halign = text.align_right, text_color = ok ? color.teal : color.red)
+    table.cell(t, 2, r, need, text_size = size.small, text_halign = text.align_left,  text_color = color.new(color.gray, 40))
+    r + 1
+
+// ============================================================================
+//  Everything below runs once, on the last bar, against the newest data -
+//  which is exactly what the scanner does when it runs.
+// ============================================================================
+if barstate.islast
+    for l in cupLines
+        line.delete(l)
+    for l in lvlLines
+        line.delete(l)
+    for t in tags
+        label.delete(t)
+    array.clear(cupLines)
+    array.clear(lvlLines)
+    array.clear(tags)
+    table.clear(verdict, 0, 0, 2, 21)
+
+    int lastBar  = bar_index - (dropLive and unfinished ? 1 : 0)
+    int histFrom = math.max(0, lastBar - histBars + 1)
+
+    // --- find_cup(): newest valid cup whose right rim can still hold a handle
+    int   cupL   = na
+    int   cupR   = na
+    float buy    = na
+    float cupLo  = na
+    float depth  = na
+    int   cupLen = na
+    int   loBar  = na
+    float round_ = na
+    float pos_   = na
+    float adv_   = na
+    string miss  = "no pivot pair formed a cup"
+    bool  found  = false
+    // The rejection that actually matters is the one against the NEWEST rim -
+    // the base a trader is watching. The old code kept whatever reason was
+    // recorded last, which was almost always "handle aged out" from running off
+    // the end of the pivot list, and that hid the real reason. Keep instead the
+    // candidate that got FURTHEST through the gates, by rank.
+    string nearMiss = ""
+    int    nearRank = -1
+    float  nearRp   = na
+    int    nearAge  = na
+    bool   seenRim  = false
+    bool   firstRim = false
+
+    int np_ = array.size(pivBar)
+    if np_ >= 2
+        for a = np_ - 1 to 0
+            int ri = array.get(pivBar, a)
+            if ri > lastBar or ri < histFrom
+                continue
+            if lastBar - ri > handleMax
+                miss := "handle aged out (" + str.tostring(lastBar - ri) + " days since the rim, max " + str.tostring(handleMax) + ")"
+                break
+            float rp = array.get(pivPrice, a)
+            firstRim := not seenRim
+            seenRim  := true
+            if firstRim
+                nearRp  := rp
+                nearAge := lastBar - ri
+            // Pine infers loop direction from the bounds, so `for b = a - 1 to 0`
+            // counts UPWARD when a is 0 and would index the array at -1. The
+            // Python's range(a - 1, -1, -1) is simply empty there.
+            if a < 1
+                continue
+            for b = a - 1 to 0
+                int li = array.get(pivBar, b)
+                if li < histFrom
+                    break
+                int len = ri - li
+                if len > cupMax
+                    miss := "cup too long (" + str.tostring(len) + " bars)"
+                    break
+                if len < cupMin
+                    if firstRim and 1 > nearRank
+                        nearRank := 1
+                        nearMiss := "cup too short (" + str.tostring(len) + " bars, min " + str.tostring(cupMin) + ")"
+                    miss := "cup too short (" + str.tostring(len) + " bars, min " + str.tostring(cupMin) + ")"
+                    continue
+                float lp = array.get(pivPrice, b)
+                if not (rp <= lp * (1 + rimUp) and rp >= lp * (1 - rimDown))
+                    if firstRim and 2 > nearRank
+                        nearRank := 2
+                        nearMiss := "rims uneven (left " + str.tostring(lp, format.mintick) + " vs right " + str.tostring(rp, format.mintick) + ")"
+                    miss := "rims uneven (left " + str.tostring(lp, format.mintick) + " vs right " + str.tostring(rp, format.mintick) + ")"
+                    continue
+
+                float rimHi = math.max(lp, rp)
+                float lo    = 1e12
+                int   lb_   = ri
+                float hiIn  = 0.0
+                for i = li + 1 to ri - 1
+                    float lv = low[bar_index - (i)]
+                    float hv = high[bar_index - (i)]
+                    if lv < lo
+                        lo  := lv
+                        lb_ := i
+                    hiIn := math.max(hiIn, hv)
+
+                if hiIn > rimHi * (1 + pierceTol)
+                    if firstRim and 3 > nearRank
+                        nearRank := 3
+                        nearMiss := "price pierced above the rim mid-cup"
+                    miss := "price pierced above the rim mid-cup"
+                    continue
+                float dep = (rimHi - lo) / rimHi
+                if dep < minDepth or dep > maxDepth
+                    if firstRim and 4 > nearRank
+                        nearRank := 4
+                        nearMiss := "cup depth " + str.tostring(dep * 100, "#.#") + "% outside " + str.tostring(minDepth * 100, "#") + "-" + str.tostring(maxDepth * 100, "#") + "%"
+                    miss := "cup depth " + str.tostring(dep * 100, "#.#") + "% outside " + str.tostring(minDepth * 100, "#") + "-" + str.tostring(maxDepth * 100, "#") + "%"
+                    continue
+                float pp = (lb_ - li) * 1.0 / len
+                if pp < 0.15 or pp > 0.85
+                    if firstRim and 5 > nearRank
+                        nearRank := 5
+                        nearMiss := "cup low sits " + str.tostring(pp, "#.##") + " across (needs 0.15-0.85)"
+                    miss := "cup low sits at " + str.tostring(pp, "#.##") + " of the way across (needs 0.15-0.85)"
+                    continue
+
+                float span = rimHi - lo
+                if span <= 0
+                    continue
+                float acc = 0.0
+                for i = li + 1 to ri - 1
+                    acc += (rimHi - close[bar_index - (i)]) / span
+                float rnd = acc / (ri - li - 1)
+                if rnd < minRound
+                    if firstRim and 6 > nearRank
+                        nearRank := 6
+                        nearMiss := "shape " + str.tostring(rnd, "#.###") + " is below the " + str.tostring(minRound, "#.##") + " cutoff (a V, not a U)"
+                    miss := "V-shaped, shape " + str.tostring(rnd, "#.###")
+                    continue
+
+                float adv = na
+                if priorPct > 0
+                    int ps = math.max(0, li - priorLook)
+                    if ps >= li
+                        continue
+                    float pLo = 1e12
+                    for i = ps to li - 1
+                        pLo := math.min(pLo, low[bar_index - (i)])
+                    if pLo <= 0
+                        continue
+                    adv := (lp - pLo) / pLo
+                    if adv < priorPct
+                        if firstRim and 7 > nearRank
+                            nearRank := 7
+                            nearMiss := "only " + str.tostring(adv * 100, "#") + "% advance before the base, needs " + str.tostring(priorPct * 100, "#") + "%"
+                        miss := "no " + str.tostring(priorPct * 100, "#") + "% advance before the base (" + str.tostring(adv * 100, "#") + "%)"
+                        continue
+
+                cupL   := li
+                cupR   := ri
+                buy    := rp
+                cupLo  := lo
+                depth  := dep
+                cupLen := len
+                loBar  := lb_
+                round_ := rnd
+                pos_   := pp
+                adv_   := adv
+                found := true
+                break
+            if found
+                break
+
+    // --- evaluate(): what has the handle done since the right rim? ----------
+    string stage  = "NONE"
+    // Prefer the specific rejection of the newest rim over the generic one.
+    string why    = nearRank >= 0 ? "rim " + str.tostring(nearRp, format.mintick) + " (" + str.tostring(nearAge) + "d): " + nearMiss : miss
+    float  hLow   = na
+    float  hDep   = na
+    int    hDays  = na
+    float  slope  = na
+    float  dry    = na
+    float  slopeT = na
+    float  stop_  = na
+    float  tgt    = na
+    int    boBar  = na
+    int    since  = na
+    float  px     = close[bar_index - (lastBar)]
+
+    if found
+        hDays := lastBar - cupR
+        hLow  := 1e12
+        for i = cupR + 1 to lastBar
+            hLow := math.min(hLow, low[bar_index - (i)])
+        hDep := (buy - hLow) / buy
+        tgt  := buy + (buy - cupLo)
+
+        // breakout_index(): first qualifying breakout after the right rim
+        for i = cupR + 1 to lastBar
+            if i - cupR < handleMin
+                continue
+            float c = close[bar_index - (i)]
+            if c <= buy or c > buy * (1 + maxExt)
+                continue
+            float av = avgVol[bar_index - (i)]
+            if not na(av) and volume[bar_index - (i)] < volMult * av
+                continue
+            float s2 = sma200[bar_index - (i)]
+            if not na(s2) and c <= s2
+                continue
+            boBar := i
+            break
+
+        // handle_quality(): the breakout bar's price and volume both spike, so
+        // the handle is measured UP TO it, never through it.
+        int hEnd = na(boBar) ? lastBar + 1 : boBar
+        if hEnd - (cupR + 1) >= 3
+            int   m  = hEnd - (cupR + 1)
+            float sx  = 0.0
+            float sy  = 0.0
+            float sxy = 0.0
+            float sxx = 0.0
+            float syy = 0.0
+            float sv  = 0.0
+            for k = 0 to m - 1
+                float yv = close[bar_index - (cupR + 1 + k)]
+                sx  += k
+                sy  += yv
+                sxy += k * yv
+                sxx += k * k
+                syy += yv * yv
+                sv  += volume[bar_index - (cupR + 1 + k)]
+            float den = m * sxx - sx * sx
+            if den != 0
+                // ROUNDED to 3 places on purpose. handle_quality() in the
+                // Python returns round(slope, 3) and round(dry, 2), and
+                // evaluate() compares those rounded values against the
+                // thresholds - so a handle drifting up by 0.0004%/day rounds
+                // to 0.0 and passes. That is display rounding that leaked into
+                // a gate, and it is arguably a wart, but the dashboard has
+                // been publishing it. The chart copies it rather than quietly
+                // disagreeing about a stock sitting on the boundary.
+                // Differential testing found this: 19 mismatches in 4,908
+                // generated series, every one of them a handle within a
+                // rounding error of flat.
+                float raw = (m * sxy - sx * sy) / den
+                slope := math.round(raw / buy * 100, 3)
+                // ...and the rise has to beat its own scatter before it counts
+                // as a wedge. These are the centred sums the t-stat needs.
+                float cxx = sxx - sx * sx / m
+                float cxy = sxy - sx * sy / m
+                float cyy = syy - sy * sy / m
+                float sse = cxx != 0 ? math.max(cyy - (cxy / cxx) * cxy, 0.0) : 0.0
+                if m > 2 and cxx > 0 and sse > 0
+                    float se = math.sqrt(sse / ((m - 2) * cxx))
+                    slopeT := se != 0 ? math.round((cxy / cxx) / se, 2) : na
+                else if m > 2 and sse == 0
+                    slopeT := 0.0
+            float ref = avgVol[bar_index - (hEnd - 1)]
+            if not na(ref) and ref > 0
+                dry := math.round((sv / m) / ref, 2)
+
+        if cupLen + hDays < baseMin
+            stage := "NONE"
+            why   := "base under 7 weeks"
+        else if not na(slope) and slope > handleSlope and (na(slopeT) or slopeT > handleSlopeT)
+            stage := "NONE"
+            why   := "handle wedges upward (" + str.tostring(slope, "#.###") + "%/day, t " + str.tostring(slopeT, "#.##") + ")"
+        else if not na(dry) and dry > handleVol
+            stage := "NONE"
+            why   := "no volume dry-up in handle (" + str.tostring(dry, "#.##") + "x)"
+        else if not na(boBar)
+            since := lastBar - boBar
+            if since > boWindow
+                stage := "NONE"
+                why   := "breakout too old (" + str.tostring(since) + " sessions)"
+            else if px < buy
+                stage := "NONE"
+                why   := "breakout failed - back below buy point"
+            else if px > buy * (1 + maxExt)
+                stage := "NONE"
+                why   := "extended " + str.tostring((px / buy - 1) * 100, "#.##") + "% past the buy point"
+            else
+                stage := "BREAKOUT"
+                stop_ := math.max(hLow, close[bar_index - (boBar)] * (1 - maxLoss))
+        else
+            float mid = cupLo + (buy - cupLo) / 2
+            if hDays > handleMax or hLow < mid or hDep > handleDepth
+                stage := "NONE"
+                why   := "handle broke down"
+            else if px > buy * (1 + maxExt)
+                stage := "NONE"
+                why   := "extended " + str.tostring((px / buy - 1) * 100, "#.##") + "% past the buy point"
+            else
+                stage := "HANDLE FORMING"
+                // The stop belongs to the price you will actually pay - the buy
+                // point - because you are not supposed to have bought yet.
+                stop_ := math.max(hLow, buy * (1 - maxLoss))
+
+    // --- draw ---------------------------------------------------------------
+    if found and showCup
+        color cc = stage == "NONE" ? color.new(color.gray, 45) : color.new(color.teal, 20)
+        array.push(cupLines, line.new(cupL, high[bar_index - (cupL)], loBar, cupLo, color=cc, width=2))
+        array.push(cupLines, line.new(loBar, cupLo, cupR, buy,          color=cc, width=2))
+
+    if stage != "NONE"
+        int x2 = lastBar + 12
+        array.push(lvlLines, line.new(cupR, buy,   x2, buy,   color=color.orange, width=2))
+        array.push(lvlLines, line.new(cupR, stop_, x2, stop_, color=color.red,    width=1, style=line.style_dashed))
+        array.push(lvlLines, line.new(cupR, tgt,   x2, tgt,   color=color.green,  width=1, style=line.style_dashed))
+        array.push(tags, label.new(x2, buy,   "Buy "    + str.tostring(buy,   format.mintick), style=label.style_label_left, color=color.orange, textcolor=color.white, size=size.small))
+        array.push(tags, label.new(x2, stop_, "Stop "   + str.tostring(stop_, format.mintick), style=label.style_label_left, color=color.red,    textcolor=color.white, size=size.small))
+        array.push(tags, label.new(x2, tgt,   "Target " + str.tostring(tgt,   format.mintick), style=label.style_label_left, color=color.green,  textcolor=color.white, size=size.small))
+        if not na(boBar)
+            array.push(tags, label.new(boBar, low[bar_index - (boBar)], "BREAKOUT\n" + str.tostring(close[bar_index - (boBar)], format.mintick), style=label.style_label_up, color=color.green, textcolor=color.white, size=size.small))
+
+    // --- the verdict, gate by gate, the way explain_pattern.py prints it -----
+    if showTable
+        int r = 0
+        table.cell(verdict, 0, r, stage == "NONE" ? "NOT LISTED" : stage, text_size=size.normal,
+             text_color=stage == "NONE" ? color.red : color.teal, text_halign=text.align_left)
+        table.cell(verdict, 1, r, "", text_size=size.normal)
+        table.cell(verdict, 2, r, stage == "NONE" ? why : "", text_size=size.small, text_color=color.gray, text_halign=text.align_left)
+        r += 1
+
+        if found
+            r := vrow(verdict, r, "cup length",       str.tostring(cupLen) + " bars / " + str.tostring(cupLen / 5.0, "#.#") + "w", str.tostring(cupMin) + "-" + str.tostring(cupMax),        cupLen >= cupMin and cupLen <= cupMax)
+            r := vrow(verdict, r, "cup depth",        str.tostring(depth * 100, "#.#") + "%",                                      str.tostring(minDepth * 100, "#") + "-" + str.tostring(maxDepth * 100, "#") + "%", depth >= minDepth and depth <= maxDepth)
+            r := vrow(verdict, r, "shape (U vs V)",    str.tostring(round_, "#.###"),                                               ">= " + str.tostring(minRound, "#.##"),                   round_ >= minRound)
+            r := vrow(verdict, r, "low sits across",  str.tostring(pos_, "#.##"),                                                  "0.15-0.85",                                              pos_ >= 0.15 and pos_ <= 0.85)
+            r := vrow(verdict, r, "prior advance",    na(adv_) ? "off" : str.tostring(adv_ * 100, "#") + "%",                      ">= " + str.tostring(priorPct * 100, "#") + "%",          na(adv_) or adv_ >= priorPct)
+            r := vrow(verdict, r, "cup + handle",     str.tostring(cupLen + hDays) + " bars",                                      ">= " + str.tostring(baseMin),                            cupLen + hDays >= baseMin)
+            r := vrow(verdict, r, "handle age",       str.tostring(hDays) + " days",                                               str.tostring(handleMin) + "-" + str.tostring(handleMax),  hDays >= handleMin and hDays <= handleMax)
+            r := vrow(verdict, r, "handle depth",     str.tostring(hDep * 100, "#.#") + "%",                                       "<= " + str.tostring(handleDepth * 100, "#") + "%",       hDep <= handleDepth)
+            r := vrow(verdict, r, "handle drift",     na(slope) ? "too short" : str.tostring(slope, "#.###") + "%/day",            "<= " + str.tostring(handleSlope, "#.#"),                 na(slope) or slope <= handleSlope or na(slopeT) or slopeT <= handleSlopeT)
+            r := vrow(verdict, r, "  ...beats its own noise", na(slopeT) ? "too short" : "t " + str.tostring(slopeT, "#.##"),          "<= " + str.tostring(handleSlopeT, "#.#") + " is flat",   na(slopeT) or slopeT <= handleSlopeT or na(slope) or slope <= handleSlope)
+            r := vrow(verdict, r, "handle volume",    na(dry) ? "too short" : str.tostring(dry, "#.##") + "x",                     "<= " + str.tostring(handleVol, "#.#") + "x",             na(dry) or dry <= handleVol)
+            r := vrow(verdict, r, "extension",        str.tostring((px / buy - 1) * 100, "#.##") + "%",                            "<= " + str.tostring(maxExt * 100, "#") + "%",            px <= buy * (1 + maxExt))
+            if not na(boBar)
+                r := vrow(verdict, r, "broke out",    str.tostring(since) + " sessions ago",                                       "<= " + str.tostring(boWindow),                           since <= boWindow)
+            if stage != "NONE"
+                r := vrow(verdict, r, "buy point",    str.tostring(buy,   format.mintick), "", true)
+                r := vrow(verdict, r, "stop",         str.tostring(stop_, format.mintick) + "  (-" + str.tostring((1 - stop_ / (na(boBar) ? buy : close[bar_index - (boBar)])) * 100, "#.#") + "%)", "", true)
+                r := vrow(verdict, r, "target",       str.tostring(tgt,   format.mintick) + "  (+" + str.tostring((tgt / buy - 1) * 100, "#.#") + "%)", "", true)
+            r := vrow(verdict, r, "RS Rating",        "not available", "dashboard needs 80+", true)
+
+plot(sma50,  "50 SMA",  color=color.new(color.blue, 40))
+plot(sma200, "200 SMA", color=color.new(color.gray, 20))
