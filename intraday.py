@@ -76,13 +76,14 @@ P = dict(
     min_rvol=2.0,          # "abnormal" opening volume starts here
     min_gap=0.5,           # % - needs some dislocation to be in play
     min_atr=1.5,           # % - must travel far enough to cover costs
-    # 0.50, not the 0.10 the US research used. Measured on 177 triggered
-    # setups across 50 liquid NSE names over 60 sessions (backtest_orb.py):
-    #   0.10 ATR -> stopped out 90% of the time, costs alone ate 0.72R per
-    #               trade, and the whole thing lost 0.759R per trade
-    #               (t = -2.53, 95% CI [-1.35, -0.17]) - significantly negative
-    #   0.50 ATR -> stopped 34%, costs 0.14R, +0.078R per trade
-    #               (t = 0.72, CI [-0.14, +0.29]) - no edge, but no bleed
+    # 0.50, not the 0.10 the US research used. Measured on 179 trades from
+    # 248 qualifying days across 50 liquid NSE names over 60 sessions
+    # (backtest_orb.py), costs including 0.05% a side of slippage:
+    #   0.10 ATR -> stopped out 93% of the time, costs alone ate 0.66R per
+    #               trade, and the whole thing lost 0.905R per trade
+    #               (t = -3.21, 95% CI [-1.46, -0.35]) - significantly negative
+    #   0.50 ATR -> stopped 33%, costs 0.13R, +0.132R per trade
+    #               (t = 1.09, CI [-0.10, +0.37]) - no edge, but no bleed
     # A 0.10-ATR stop on a 3%-ATR stock is ~0.3% wide, barely more than the
     # 0.183% round trip. You were paying most of your risk budget in fees.
     stop_atr_frac=0.50,
@@ -251,6 +252,17 @@ def add_trade_plan(row, p=P):
         out["Short_Stop"] = round(row["OR_Low"] + stop_dist, 2)
         out["Risk_pct"] = round(stop_dist / row["OR_High"] * 100, 2)
 
+    # The exit. Not a price, because every fixed price target measured WORSE
+    # than simply holding to the close (backtest_orb.py, 248 setups):
+    #     exit at close  +0.132R   43% win
+    #     target 1R      -0.053R   51% win   <- better win rate, loses money
+    #     target 2R      -0.001R
+    #     target 3R      +0.018R
+    # Capping the winners is what kills it: only 18% of these trades ever
+    # travel 1 ATR, so the few that run are the entire result, and a target
+    # sells them early. "Close" means your broker's intraday square-off.
+    out["Exit"] = "close"
+
     be = trading_costs.breakeven_pct(price, p["position"], intraday=True)
     out["Breakeven_pct"] = be
     # Is the stock's normal daily travel even big enough to pay for the trade?
@@ -403,7 +415,7 @@ def write_status(scanned, usable, skipped, kept):
 COLS = ["Symbol", "Company", "Session", "Score", "RVol", "Gap_pct", "ATR_pct",
         "Prev_Close", "Open", "OR_High", "OR_Low", "OR_Range_pct",
         "Long_Trigger", "Long_Stop", "Short_Trigger", "Short_Stop",
-        "Stop_Dist", "Risk_pct", "Breakeven_pct", "Cost_vs_ATR",
+        "Stop_Dist", "Risk_pct", "Exit", "Breakeven_pct", "Cost_vs_ATR",
         "Turnover_Cr", "Open_Vol", "Last"]
 
 

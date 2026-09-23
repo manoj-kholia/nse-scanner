@@ -10,7 +10,7 @@
   img{max-width:100%}
   [hidden]{display:none!important}
 </style>
-<meta name="build" content="2026-09-23-4">
+<meta name="build" content="2026-09-23-5">
   <title>NSE Base Scanner</title>
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Archivo:wght@500;600;700&family=IBM+Plex+Mono:wght@400;500;600&family=IBM+Plex+Sans:wght@400;500;600&display=swap">
@@ -269,6 +269,8 @@
   /* six nowrap columns are wider than a phone. Let the TABLE scroll rather
      than the page - a sideways-scrolling page makes the rest unreadable. */
   .pscroll{overflow-x:auto; -webkit-overflow-scrolling:touch; max-width:100%}
+  .exitrule{font-family:var(--mono); color:var(--faint); border-bottom:1px dotted var(--line);
+            cursor:help}
   .playstatus{
     margin-top:12px; padding:12px 15px; border-radius:12px; font-size:12.5px;
     line-height:1.6; background:var(--surface); border:1px solid var(--line);
@@ -412,8 +414,27 @@
     fee, so both columns are shown instead of one. Widening the stop removes the bleed, but
     <b>every positive interval still crosses zero: no edge was demonstrated</b>.
     At the 0.50 stop, 38% of trades reached 0.5 ATR of favourable movement and only
-    <b>18% ever reached 1 ATR</b> &mdash; about one day in five &mdash; which is the ceiling a
-    target has to live under. SEBI, July 2024: 71% of individual intraday traders in the
+    <b>18% ever reached 1 ATR</b> &mdash; about one day in five.
+
+    <strong>Why the Exit column says &ldquo;at close&rdquo; and there is no price target.</strong>
+    Because every fixed target was measured and every one of them was <em>worse</em>
+    (same 179 trades, costs including slippage):
+    <div class="pscroll">
+    <table class="ptest">
+      <tr><th>Exit rule</th><th>Avg R</th><th>Win rate</th><th>t</th><th>95% CI</th></tr>
+      <tr class="now"><td>hold to the close <em>(used)</em></td><td>+0.132</td><td>43%</td><td>1.09</td><td>[&minus;0.10, +0.37]</td></tr>
+      <tr class="bad"><td>target 1R</td><td>&minus;0.053</td><td>51%</td><td>&minus;0.82</td><td>[&minus;0.18, +0.07]</td></tr>
+      <tr><td>target 2R</td><td>&minus;0.001</td><td>43%</td><td>&minus;0.01</td><td>[&minus;0.16, +0.16]</td></tr>
+      <tr><td>target 3R</td><td>+0.018</td><td>43%</td><td>0.19</td><td>[&minus;0.16, +0.20]</td></tr>
+      <tr><td>target 5R</td><td>+0.083</td><td>43%</td><td>0.78</td><td>[&minus;0.12, +0.29]</td></tr>
+    </table>
+    </div>
+    Look at the 1R row: it has the <b>best win rate of the lot (51%) and it loses money</b>.
+    Only a fifth of these trades ever run, so the handful that do are the entire result,
+    and a target sells exactly those early. A target would make this table look more
+    complete and make the plan worse, so the exit is a rule instead: square off at your
+    broker's intraday cut-off.
+    SEBI, July 2024: 71% of individual intraday traders in the
     equity cash segment lost money.
     <b>Treat this as a watchlist and paper-trade it. Nothing here justifies real money.</b>
   </div>
@@ -508,7 +529,7 @@ let view = "watch";
 let sort = {key:"sc", dir:-1};
 const VOL_STEPS = [0,10000,25000,50000,100000,200000,300000,500000,750000,1e6,1.5e6,2e6,3e6,5e6,7.5e6,1e7,1.5e7,2e7,3e7,5e7,1e8];
 
-const BUILD = "2026-09-23-4";
+const BUILD = "2026-09-23-5";
 const $ = id => document.getElementById(id);
 
 // ---------- formatting ----------
@@ -712,6 +733,10 @@ const COLS_PLAY = [
   {k:"orl",  t:"OR Low"},
   {k:"ls",   t:"Long Stop"},
   {k:"irisk",t:"Stop %"},
+  // The exit is a rule, not a price. Every fixed price target measured worse
+  // than holding to the close, so publishing one would be publishing a worse
+  // plan that merely looks more complete. See the note above the table.
+  {k:"exit", t:"Exit"},
   {k:"be",   t:"Breakeven"},
   {k:"cva",  t:"Cost / ATR"},
   {k:"to",   t:"Turnover"},
@@ -786,6 +811,11 @@ function cell(r, k){
     case "gap": return r.gap == null ? "–" :
       '<span class="' + sgn(r.gap) + '">' + (r.gap > 0 ? "+" : "") + r.gap.toFixed(2) + "%</span>";
     case "atr": case "irisk": return r[k] == null ? "–" : r[k].toFixed(2) + "%";
+    case "exit": return r.exit == null ? "–" :
+      '<span class="exitrule" title="Square off at your broker\'s intraday cut-off. '
+      + 'Measured on 179 trades: holding to the close returned +0.132R, a 1R target '
+      + '-0.053R, a 2R target -0.001R. Capping the winners is what loses the money.">'
+      + "at " + esc(r.exit) + "</span>";
     case "be": return r.be == null ? "–" :
       '<span class="mono">' + r.be.toFixed(3) + "%</span>";
     case "cva": {

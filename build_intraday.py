@@ -26,7 +26,7 @@ MAP = {
     "OR_High": "orh", "OR_Low": "orl", "OR_Range_pct": "orr",
     "Long_Trigger": "lt", "Long_Stop": "ls",
     "Short_Trigger": "st", "Short_Stop": "ss",
-    "Stop_Dist": "sd", "Risk_pct": "irisk", "Breakeven_pct": "be",
+    "Stop_Dist": "sd", "Risk_pct": "irisk", "Exit": "exit", "Breakeven_pct": "be",
     "Cost_vs_ATR": "cva", "Turnover_Cr": "to", "Last": "last",
 }
 
