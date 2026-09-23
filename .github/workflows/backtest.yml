@@ -1,0 +1,66 @@
+name: Backtest the opening-range breakout
+
+# Manual only. Nothing depends on this and it commits nothing - it exists so
+# you can re-measure the intraday strategy on fresh data instead of trusting
+# the numbers I wrote into the page in September 2026.
+#
+# The result appears in the run's Summary, not just the log, so you can read
+# it on a phone. What you are looking for is the "close" column and the 95%
+# CI beside it. If the interval still straddles zero, nothing has changed and
+# In Play is still a watchlist.
+
+on:
+  workflow_dispatch:
+    inputs:
+      top:
+        description: "How many liquid names to test (50 is ~5 min, 200 is ~20)"
+        default: "50"
+        required: true
+      stops:
+        description: "Stop widths to compare, as fractions of the daily ATR"
+        default: "0.10,0.25,0.50,0.75,1.00"
+        required: true
+
+permissions:
+  contents: read
+
+jobs:
+  backtest:
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: pip
+
+      - name: Install dependencies
+        run: pip install -r requirements.txt
+
+      # Yahoo serves ~60 days of 5-minute bars and no more, so this is one
+      # market window. It cannot tell you the strategy works; it can only tell
+      # you when it plainly does not.
+      - name: Measure
+        run: |
+          set -o pipefail
+          python backtest_orb.py \
+            --top "${{ inputs.top }}" \
+            --stops "${{ inputs.stops }}" 2>&1 | tee result.txt
+
+      - name: Put the result in the run summary
+        if: always()
+        run: |
+          {
+            echo "## Opening-range breakout, measured $(TZ=Asia/Kolkata date +'%d %b %Y %H:%M IST')"
+            echo
+            echo '```'
+            cat result.txt 2>/dev/null || echo "The run produced no output - check the log above."
+            echo '```'
+            echo
+            echo "A **t below about 2** means this sample cannot tell the result apart from"
+            echo "zero. Costs exclude slippage, so the real numbers are worse than these."
+            echo "If the 95% CI still crosses zero, no edge has been demonstrated and the"
+            echo "In Play tab is still a watchlist, not a signal."
+          } >> "$GITHUB_STEP_SUMMARY"
