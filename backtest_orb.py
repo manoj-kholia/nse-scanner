@@ -229,6 +229,7 @@ def main():
         print(f"{'stop':>10} {'setups':>7} {'trig%':>6} {'stop-out%':>10} "
               f"{'costs(R)':>9} {'close':>8} {'t':>6}  {'95% CI':>18}")
         print("-" * 82)
+        keep = None
         for frac in [float(x) for x in args.stops.split(",")]:
             trades = []
             for s, f in frames.items():
@@ -244,9 +245,23 @@ def main():
             print(f"{frac:>9.2f}A {r['setups']:>7} {r['trigger_pct']:>5.0f}% "
                   f"{r['stopped_pct']:>9}% {r['avg_cost_r']:>9.2f} "
                   f"{c['avg_r']:>+8.3f} {c['t'] if c['t'] is not None else 0:>6.2f}  {ci:>18}")
-            if abs(frac - 0.50) < 1e-9:
+            if abs(frac - intraday.P["stop_atr_frac"]) < 1e-9:
                 print(f"{'':>10} reached: " + "  ".join(
                     f"{k} {v}%" for k, v in r["reached"].items()))
+                keep = r          # the stop actually in use - exit rules below
+
+        # Which exit rule is best at the stop the screen actually uses? This
+        # is how the Target column is chosen: by measurement, not by taste.
+        if keep:
+            print(f"\n  exit rule at the {intraday.P['stop_atr_frac']:.2f} ATR stop:")
+            print(f"  {'rule':<16} {'avg R':>8} {'win%':>6} {'t':>6}  {'95% CI':>18}")
+            rules = ["exit at close"] + [k for k in keep if k.startswith("target ")]
+            for name in rules:
+                v = keep[name]
+                ci = (f"[{v['ci95'][0]:+.2f}, {v['ci95'][1]:+.2f}]"
+                      if v.get("ci95") else "")
+                print(f"  {name:<16} {v['avg_r']:>+8.3f} {v['win_pct']:>5}% "
+                      f"{v['t'] if v['t'] is not None else 0:>6.2f}  {ci:>18}")
 
     print("\nA t below about 2 means the sample cannot tell this apart from zero.")
     print("The two tables differ ONLY in the slippage assumption. If they disagree")

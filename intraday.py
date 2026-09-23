@@ -233,8 +233,13 @@ def opening_stats(df, p=P, why=None):
 def add_trade_plan(row, p=P):
     """The ORB entry, its stop, and what the round trip costs.
 
-    The stop is 10% of the 14-day ATR, which is the figure the research used -
-    tight, so the losers are small and the rare winner pays for them.
+    The stop is 50% of the 14-day ATR. The research used 10%, which is tight
+    enough that the losers are small and one winner pays for them - but that
+    was measured on US stocks. Tested on NSE it was hit 93% of the time and
+    lost money on both cost assumptions (see backtest_orb.py), because on a
+    3%-ATR stock a 0.10 ATR stop is ~0.3% wide and the round trip alone costs
+    0.18%. There is no TARGET here on purpose: only 18% of these trades ever
+    travel 1 ATR, so any fixed target far out is a target that rarely pays.
     """
     atr, price = row.get("ATR"), row.get("Open")
     out = dict(Long_Trigger=row.get("OR_High"), Short_Trigger=row.get("OR_Low"))
