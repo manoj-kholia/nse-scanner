@@ -1,0 +1,40 @@
+name: Why is this stock not on the list
+
+# Manual. Runs explain_pattern.py for one or more symbols and prints every
+# gate with its measured value against its limit. Commits nothing.
+
+on:
+  workflow_dispatch:
+    inputs:
+      symbols:
+        description: "Symbols, space separated (e.g. MCX ICIL)"
+        default: "MCX"
+        required: true
+
+permissions:
+  contents: read
+
+jobs:
+  explain:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: pip
+      - name: Install dependencies
+        run: pip install -r requirements.txt
+      - name: Explain
+        run: |
+          set -o pipefail
+          python explain_pattern.py ${{ inputs.symbols }} 2>&1 | tee explain.txt
+      - name: Put it in the run summary
+        if: always()
+        run: |
+          {
+            echo '```'
+            cat explain.txt 2>/dev/null || echo "no output - see the log"
+            echo '```'
+          } >> "$GITHUB_STEP_SUMMARY"
