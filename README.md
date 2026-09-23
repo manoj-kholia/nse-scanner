@@ -206,6 +206,41 @@ How far these trades travel, at the 0.50 stop: 0.5 ATR reached on **38%**,
 target has to live under. Re-run the workflow as sessions accumulate and see
 whether it changes; treat the tab as a watchlist until it does.
 
+### Why there is no price target
+
+The In Play table has an **Exit** column and it says "at close". That is not
+laziness — every fixed target was measured on the same 179 trades and every
+one came out worse:
+
+| Exit rule | Avg R | Win rate | t | 95% CI |
+|---|---|---|---|---|
+| **hold to the close** *(used)* | **+0.132** | 43% | 1.09 | [−0.10, +0.37] |
+| target 1R | **−0.053** | **51%** | −0.82 | [−0.18, +0.07] |
+| target 2R | −0.001 | 43% | −0.01 | [−0.16, +0.16] |
+| target 3R | +0.018 | 43% | 0.19 | [−0.16, +0.20] |
+| target 5R | +0.083 | 43% | 0.78 | [−0.12, +0.29] |
+
+Look at the 1R row. It has the **best win rate of the lot and it loses money**.
+Only 18% of these trades ever travel 1 ATR, so the handful that run are the
+entire result and a target sells exactly those early — you end up with more
+winning days and less money, which is the most expensive way to feel good.
+
+"At close" means your broker's intraday square-off, and it is the rule the
+numbers above were measured under. A target would make the table look more
+complete and make the plan worse.
+
+### Checking it against the market
+
+`verify_inplay.py` (Actions → **Verify the In Play table**) re-downloads the
+day's bars, recomputes every published figure from scratch and diffs them, then
+walks the session to show what each published level actually did. It also
+answers two questions directly:
+
+    --explain YESBANK          which check rejected it, with the numbers
+    --touched MANINDS:898.20   did that price actually trade
+
+First run, 23 Sep 2026: **0 of 14 rows disagreed with the market.**
+
 **Read this before using it.** Zarattini, Barbon and Aziz tested a 5-minute
 opening range breakout on 7,000+ US stocks, 2016-2023. Unfiltered it returned
 **3.2% a year** — nothing. Restricted to the 20 stocks each day with the most
