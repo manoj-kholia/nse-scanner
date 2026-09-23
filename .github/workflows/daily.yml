@@ -47,6 +47,42 @@ jobs:
         run: |
           git config user.name  "nse-scanner"
           git config user.email "actions@users.noreply.github.com"
-          git add -A docs EQUITY_L_live.csv cup_handle_signals.csv market.json update_log.txt 2>/dev/null || true
-          git diff --staged --quiet || git commit -m "Scan $(TZ=Asia/Kolkata date +'%Y-%m-%d %H:%M IST')"
-          git push
+
+          # Everything this run generates. Nothing else belongs here.
+          OUTPUTS="docs EQUITY_L_live.csv cup_handle_signals.csv market.json update_log.txt"
+
+          stage() {
+            for p in $OUTPUTS; do
+              # One path at a time: `git add` with several pathspecs stages
+              # NOTHING if any one of them is missing.
+              [ -e "$p" ] && git add -A "$p" 2>/dev/null || true
+            done
+          }
+
+          MSG="Scan $(TZ=Asia/Kolkata date +'%Y-%m-%d %H:%M IST')"
+          stage
+          git diff --staged --quiet && { echo "nothing changed"; exit 0; }
+          git commit -m "$MSG"
+
+          # A scan takes minutes. If anything else pushed to main while it ran
+          # - the other workflow, or a person - a bare `git push` is rejected
+          # and the whole run's work is thrown away with exit code 1. So on a
+          # rejection: keep THIS run's freshly generated output, take every
+          # other file from the remote, and commit again on top.
+          for attempt in 1 2 3; do
+            if git push; then exit 0; fi
+            echo "push rejected (attempt $attempt) - the remote moved while this run was working"
+            TMP=$(mktemp -d)
+            KEEP=""
+            for p in $OUTPUTS; do [ -e "$p" ] && KEEP="$KEEP $p"; done
+            [ -n "$KEEP" ] && tar cf "$TMP/out.tar" $KEEP
+            git fetch origin main
+            git reset --hard origin/main
+            [ -n "$KEEP" ] && tar xf "$TMP/out.tar"
+            rm -rf "$TMP"
+            stage
+            git diff --staged --quiet && { echo "remote already has this"; exit 0; }
+            git commit -m "$MSG"
+          done
+          echo "Could not push after 3 attempts."
+          exit 1
