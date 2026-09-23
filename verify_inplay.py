@@ -27,6 +27,7 @@ checkable claim and should be settled by the tape, not by argument.
 
 import argparse
 import statistics
+import time
 from datetime import datetime
 
 import pandas as pd
@@ -122,6 +123,33 @@ def outcome(df, row):
                         mfe_R=round(mfe, 2),
                         close_R=round((float(after["Close"].iloc[-1]) - entry) / sd, 2))
     return dict(fired=None)
+
+
+def atr_from_daily(sym, n=14):
+    """ATR from REAL daily bars, not from 5-minute bars rolled up.
+
+    The screen builds its ATR by grouping intraday bars into days and taking
+    each day's high and low. That is only as good as the intraday feed: any
+    bar the feed drops, and any print outside the 5-minute grid (the opening
+    and closing auctions), is silently missing from that day's range. This
+    downloads the exchange's own daily bars so the two can be compared.
+    """
+    try:
+        import yfinance as yf
+        d = yf.download(sym + ".NS", period="3mo", interval="1d",
+                        progress=False, auto_adjust=False)
+    except Exception:
+        return None
+    if d is None or d.empty or len(d) < n + 1:
+        return None
+    if isinstance(d.columns, pd.MultiIndex):
+        d.columns = d.columns.get_level_values(0)
+    prev = d["Close"].shift(1)
+    tr = pd.concat([d["High"] - d["Low"],
+                    (d["High"] - prev).abs(),
+                    (d["Low"] - prev).abs()], axis=1).max(axis=1)
+    v = tr.tail(n).mean()
+    return float(v) if pd.notna(v) else None
 
 
 def fetch(symbols, batch=10, pause=1.0):
@@ -233,6 +261,35 @@ def main():
               f"median {statistics.median(mfes):.2f}R.")
         for k in (1, 2, 3):
             print(f"  reached {k}R: {sum(m >= k for m in mfes)}/{len(mfes)}")
+
+    # --- 2b. is the ATR the stop is built on even right? -------------------
+    print("\n" + "=" * 78)
+    print("ATR: ROLLED UP FROM 5-MIN BARS vs THE EXCHANGE'S OWN DAILY BARS")
+    print("=" * 78)
+    print("The stop is half the ATR, so an ATR that is 20% wrong is a stop")
+    print("that is 20% wrong.\n")
+    print(f"{'symbol':<12}{'published':>11}{'from daily':>12}{'gap':>9}"
+          f"{'stop now':>10}{'stop should be':>16}")
+    print("-" * 70)
+    worst = []
+    for _, r in pub.iterrows():
+        s = r["Symbol"]
+        a_pub = float(r["ATR_pct"]) / 100 * float(r["Open"])
+        a_day = atr_from_daily(s)
+        if not a_day:
+            print(f"{s:<12}{a_pub:>11.2f}{'no daily data':>12}")
+            continue
+        gap = (a_day / a_pub - 1) * 100
+        worst.append((abs(gap), s, gap))
+        print(f"{s:<12}{a_pub:>11.2f}{a_day:>12.2f}{gap:>+8.1f}%"
+              f"{a_pub * 0.5:>10.2f}{a_day * 0.5:>16.2f}")
+        time.sleep(0.3)
+    if worst:
+        worst.sort(reverse=True)
+        big = [w for w in worst if w[0] > 10]
+        print(f"\n{len(big)} of {len(worst)} are off by more than 10%.")
+        if big:
+            print("  worst: " + ", ".join(f"{s} {g:+.0f}%" for _, s, g in big[:5]))
 
     # --- 3. why is a symbol missing? ---------------------------------------
     for s in extra:

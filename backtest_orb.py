@@ -73,7 +73,7 @@ def sessions_of(df):
     return intraday._sessions(df)
 
 
-def setups(df, stop_frac, cost_pct):
+def setups(df, stop_frac, cost_pct, force_long=False):
     """Every qualifying day for one symbol, walked bar by bar.
 
     Returns a list of dicts: whether it triggered, whether the stop was hit,
@@ -112,8 +112,10 @@ def setups(df, stop_frac, cost_pct):
         if not (rvol >= MIN_RVOL and abs(gap) >= MIN_GAP and atr_pct >= MIN_ATR):
             continue
 
-        long = gap > 0
+        long = True if force_long else (gap > 0)
         trig = float(o_bar["High"].max()) if long else float(o_bar["Low"].min())
+        or_hi, or_lo = float(o_bar["High"].max()), float(o_bar["Low"].min())
+        or_range_pct = (or_hi - or_lo) / day_open * 100
         sd = stop_frac * atr
         after = cur[cur.index.strftime("%H:%M") >= intraday.VOL_START]
         if after.empty:
@@ -130,7 +132,7 @@ def setups(df, stop_frac, cost_pct):
                 entry = max(trig, op[k]) if long else min(trig, op[k])
                 break
         if ei < 0:
-            out.append(dict(triggered=False))
+            out.append(dict(triggered=False, rvol=rvol, gap=abs(gap)))
             continue
 
         cl = after["Close"].to_numpy(float)
@@ -177,8 +179,52 @@ def setups(df, stop_frac, cost_pct):
                 part[k] = 0.5 * k + 0.5 * (-1.0 if stopped else eod_r)
 
         out.append(dict(triggered=True, stopped=stopped, mfe=mfe, eod_r=eod_r,
-                        r_at=r_at, tgt=tgt, part=part,
+                        r_at=r_at, tgt=tgt, part=part, long=long,
+                        rvol=rvol, gap=abs(gap), atr_pct=atr_pct,
+                        or_pct=or_range_pct, fire_bar=ei,
                         cost_r=cost_pct / (stop_frac * atr_pct)))
+    return out
+
+
+def failure_slices(trades, fields=None):
+    """Does anything you can see at 09:25 tell you the breakout will fail?
+
+    A failed breakout here means: the trigger printed, and the stop was hit.
+    Each candidate is split into low/mid/high thirds and the stop-out rate and
+    expectancy are reported for each. A filter is only worth having if the
+    thirds actually separate - if all three are the same, that field knows
+    nothing and adding it to the screen would just cost you trades.
+    """
+    T = [t for t in trades if t.get("triggered")]
+    if len(T) < 30:
+        return None
+    fields = fields or [("rvol", "relative volume"), ("gap", "abs gap %"),
+                        ("atr_pct", "ATR %"), ("or_pct", "opening range %"),
+                        ("fire_bar", "bars until it triggered")]
+    out = []
+    for key, label in fields:
+        vals = sorted(t[key] for t in T if t.get(key) is not None)
+        if len(vals) < 30:
+            continue
+        lo, hi = vals[len(vals) // 3], vals[2 * len(vals) // 3]
+        buckets = [("low", lambda v: v <= lo),
+                   ("mid", lambda v: lo < v <= hi),
+                   ("high", lambda v: v > hi)]
+        rows = []
+        for name, test in buckets:
+            grp = [t for t in T if t.get(key) is not None and test(t[key])]
+            if not grp:
+                continue
+            rs = [t["eod_r"] - t["cost_r"] for t in grp]
+            rows.append(dict(
+                bucket=name, n=len(grp),
+                span=f"{min(t[key] for t in grp):.2f}-{max(t[key] for t in grp):.2f}",
+                fail=round(sum(t["stopped"] for t in grp) / len(grp) * 100),
+                avg_r=round(sum(rs) / len(rs), 3)))
+        if len(rows) == 3:
+            spread = max(r["fail"] for r in rows) - min(r["fail"] for r in rows)
+            out.append((label, rows, spread))
+    out.sort(key=lambda x: -x[2])
     return out
 
 
@@ -332,6 +378,43 @@ def main():
                       if v.get("ci95") else "")
                 print(f"  {name:<16} {v['avg_r']:>+8.3f} {v['win_pct']:>5}% "
                       f"{v['t'] if v['t'] is not None else 0:>6.2f}  {ci:>18}")
+
+    # Can a failed breakout be spotted at 09:25, before you commit?
+    base_cost = scenarios[-1][1]
+    live = []
+    for s, f in frames.items():
+        try:
+            live += setups(f, intraday.P["stop_atr_frac"], base_cost)
+        except Exception:
+            continue
+    sl = failure_slices(live)
+    if sl:
+        print("\n=== can a failed breakout be seen coming? ===")
+        print("  stop-out rate and expectancy by what was visible at 09:25,")
+        print("  split into thirds. A field only helps if the thirds separate.\n")
+        for label, rows, spread in sl:
+            print(f"  {label}  (spread {spread} points)")
+            for r in rows:
+                print(f"    {r['bucket']:<5}{r['span']:>16}  n={r['n']:<4}"
+                      f" failed {r['fail']:>3}%   avg {r['avg_r']:>+6.3f}R")
+        print("\n  A spread under about 15 points is noise at this sample size.")
+
+    # Does trading the gap direction beat simply always going long?
+    print("\n=== direction: follow the gap, or always go long? ===")
+    for label, force in (("follow the gap (what was tested)", False),
+                         ("always long (what the table shows)", True)):
+        tr = []
+        for s, f in frames.items():
+            try:
+                tr += setups(f, intraday.P["stop_atr_frac"], base_cost, force_long=force)
+            except Exception:
+                continue
+        r = summarise(tr)
+        if not r:
+            continue
+        c = r["exit at close"]
+        ci = f"[{c['ci95'][0]:+.2f}, {c['ci95'][1]:+.2f}]" if c["ci95"] else ""
+        print(f"  {label:<36} {c['avg_r']:>+7.3f}R  t={c['t'] or 0:>5.2f}  {ci}")
 
     # Is the close really the noisy part of the day?
     prof = noise_by_time(frames)
