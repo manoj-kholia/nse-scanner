@@ -105,6 +105,39 @@ def explain(sym, df, live, min_rs=80):
           f"({cup['length']/5:.1f} weeks), depth {cup['depth']*100:.1f}%, "
           f"buy point {cup['buy']:.2f}, cup low {cup['cup_low']:.2f}")
 
+    # What SHAPE is it? A depth and a length do not tell you whether this is a
+    # rounded base or a sharp V that happens to span the same bars, and that is
+    # usually the thing a chart makes obvious and a number hides.
+    hi_a = df["High"].to_numpy(float)
+    lo_a = df["Low"].to_numpy(float)
+    cl_a = df["Close"].to_numpy(float)
+    li, rj = cup["left"], cup["right"]
+    inside = slice(li + 1, rj)
+    rim_hi = max(hi_a[li], hi_a[rj])
+    cup_low = cup["cup_low"]
+    third = cup_low + (rim_hi - cup_low) / 3
+    roundness = float((cl_a[inside] <= third).sum()) / cup["length"]
+    lo_bar = li + 1 + int(np.argmin(lo_a[inside]))
+    pos = (lo_bar - li) / cup["length"]
+    start = max(0, li - fp.P["prior_look"])
+    prior_low = float(lo_a[start:li].min()) if start < li else float("nan")
+    advance = (hi_a[li] - prior_low) / prior_low * 100 if prior_low > 0 else float("nan")
+
+    print("\n    what SHAPE is it?")
+    line(roundness >= fp.P["round_min"], "roundness (closes in the bottom third)",
+         f"{roundness:.2f}", f">= {fp.P['round_min']:.2f}")
+    print(f"          reference: sharp V-bottom 0.04, wide straight-line V 0.33,")
+    print(f"                     properly rounded U 0.38")
+    if roundness < 0.36:
+        print(f"          NOTE: {roundness:.2f} is in the band where this test cannot")
+        print(f"                separate a wide V from a real U. Look at the chart.")
+    line(0.15 <= pos <= 0.85, "low sits mid-cup, not at one end",
+         f"{pos:.2f} across", "0.15-0.85")
+    line(advance >= fp.P["prior_pct"] * 100, "advance before the base",
+         f"{advance:.0f}%", f">= {fp.P['prior_pct']*100:.0f}%")
+    line(True, "left rim vs right rim",
+         f"{hi_a[li]:.2f} / {hi_a[rj]:.2f}", "within -8% / +5%")
+
     print("\n  STEP 3 - the handle")
     close = df["Close"].to_numpy(float)
     low = df["Low"].to_numpy(float)
