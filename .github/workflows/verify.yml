@@ -1,0 +1,57 @@
+name: Verify the In Play table
+
+# Manual. Re-downloads today's bars and checks the published table against
+# them: does every number match the market, did each published trigger
+# actually fire, and how far did it run. Commits nothing.
+#
+# Two extra questions it can answer, because both come up constantly:
+#   explain  - why is a particular stock NOT on the list today?
+#   touched  - did a particular price actually trade today?
+
+on:
+  workflow_dispatch:
+    inputs:
+      explain:
+        description: "Symbols to diagnose, comma separated (e.g. YESBANK)"
+        default: ""
+        required: false
+      touched:
+        description: "Did this price trade? SYMBOL:PRICE (e.g. MANINDS:898.20)"
+        default: ""
+        required: false
+
+permissions:
+  contents: read
+
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: pip
+
+      - name: Install dependencies
+        run: pip install -r requirements.txt
+
+      - name: Check the table against the tape
+        run: |
+          set -o pipefail
+          python verify_inplay.py \
+            --explain "${{ inputs.explain }}" \
+            --touched "${{ inputs.touched }}" 2>&1 | tee verify.txt
+
+      - name: Put the result in the run summary
+        if: always()
+        run: |
+          {
+            echo "## In Play checked against the tape, $(TZ=Asia/Kolkata date +'%d %b %Y %H:%M IST')"
+            echo
+            echo '```'
+            cat verify.txt 2>/dev/null || echo "No output - check the log above."
+            echo '```'
+          } >> "$GITHUB_STEP_SUMMARY"
