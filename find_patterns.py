@@ -411,6 +411,35 @@ def drop_unfinished_session(df, now=None):
     return df.iloc[:-1], True
 
 
+def drop_phantom_sessions(df):
+    """Remove bars where nothing actually traded.
+
+    On an exchange holiday Yahoo does not skip the day - it emits a bar with
+    open = high = low = close and volume 0. TradingView omits the day entirely.
+    A bar that nobody traded is not a session, and carrying it corrupts every
+    rule that counts bars rather than dates:
+
+      * PIVOTS. A pivot high must be the highest of the five bars each side.
+        One phantom bar shifts that window by a day, which is enough to keep a
+        rim that a real session would have disqualified - or the reverse.
+      * HANDLE AGE, CUP LENGTH, BASE LENGTH. All measured in bars.
+      * THE 50-DAY VOLUME AVERAGE, which a zero drags down, making the 1.4x
+        breakout test easier to pass than it should be.
+
+    Found by reconciling the chart against the scanner: 14 Sep 2026 was an NSE
+    holiday, Yahoo filled it with a flat zero-volume bar, and that single bar
+    was the whole of the disagreement over SPLPETRO - the scanner put the right
+    rim 9 bars back and called it a breakout, the chart put it 8 bars back and
+    threw the rim out. The chart was right.
+    """
+    if "Volume" not in df.columns or df.empty:
+        return df, 0
+    vol = pd.to_numeric(df["Volume"], errors="coerce").fillna(0)
+    flat = df["High"].to_numpy(float) == df["Low"].to_numpy(float)
+    phantom = (vol <= 0).to_numpy() & flat
+    return df[~phantom], int(phantom.sum())
+
+
 def scan(symbols, downloader=None, batch_size=60, pause=1.5, period="2y",
          breakout_window=5, log=print):
     if downloader is None:
@@ -420,6 +449,7 @@ def scan(symbols, downloader=None, batch_size=60, pause=1.5, period="2y",
                                            actions=False, progress=False, threads=True)
     hits, scanned, rejected = [], 0, {}
     dropped_partial = [0]
+    dropped_phantom = [0]
     for start in range(0, len(symbols), batch_size):
         batch = symbols[start:start + batch_size]
         tickers = [s + ".NS" for s in batch]
@@ -440,6 +470,8 @@ def scan(symbols, downloader=None, batch_size=60, pause=1.5, period="2y",
                 df, trimmed = drop_unfinished_session(df)
                 if trimmed:
                     dropped_partial[0] += 1
+                df, phantoms = drop_phantom_sessions(df)
+                dropped_phantom[0] += phantoms
                 if len(df) < 60:
                     continue
                 scanned += 1

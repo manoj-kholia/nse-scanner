@@ -102,6 +102,12 @@ def explain(sym, df, live, min_rs=80):
         print("     the cup; the stock simply is not a leader by these rules today.")
         return
 
+    df, phantoms = fp.drop_phantom_sessions(df)
+    if phantoms:
+        print(f"\n  ({phantoms} zero-volume holiday bar(s) dropped - Yahoo emits a flat")
+        print("   bar for days the exchange was shut, and counting one as a session")
+        print("   shifts every pivot window and handle age by a day)")
+
     df, trimmed = fp.drop_unfinished_session(df)
     if trimmed:
         print("\n  (market still open - today's part-day bar dropped, so this is")
