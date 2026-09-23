@@ -1,0 +1,13 @@
+{
+ "ok": false,
+ "headline": "No usable intraday data",
+ "detail": "The free Yahoo feed returned prices for these stocks but NO intraday volume - every opening bar came back at zero. Relative volume is the whole basis of this screen, so it cannot run on this data source. Intraday volume for NSE needs a broker API (Kite Connect, Dhan, Fyers) or a paid vendor. This is not a quiet market - it is a missing feed.",
+ "scanned": 200,
+ "usable": 0,
+ "kept": 0,
+ "reasons": {
+  "no opening volume in the history to compare against": 199,
+  "no data returned": 1
+ },
+ "checked": "23 Sep 2026, 03:54"
+}
