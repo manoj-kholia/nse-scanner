@@ -73,8 +73,16 @@ def pivot_highs(high, piv):
     return out
 
 
-def find_cup(df, p=P):
-    """Newest valid cup whose right rim is recent enough to still have a live handle."""
+def find_cup(df, p=P, why=None):
+    """Newest valid cup whose right rim is recent enough to still have a live handle.
+
+    Pass a dict as `why` to find out what the near-misses were. "No cup" is
+    otherwise the one outcome this scanner cannot explain, which makes a stock
+    vanishing from the list look arbitrary when it is not.
+    """
+    def no(reason):
+        if why is not None:
+            why[reason] = why.get(reason, 0) + 1
     high = df["High"].to_numpy(float)
     low = df["Low"].to_numpy(float)
     close = df["Close"].to_numpy(float)
@@ -90,16 +98,20 @@ def find_cup(df, p=P):
     for ri in reversed(pivots):
         age = last - ri                               # bars since the right rim
         if age > p["handle_max"]:                     # handle would have expired
+            no(f"handle aged out ({age} days since the rim, max {p['handle_max']})")
             break
         for li in reversed([q for q in pivots if q < ri]):
             length = ri - li
             if length > p["cup_max"]:
+                no(f"cup too long ({length} bars)")
                 break
             if length < p["cup_min"]:
+                no(f"cup too short ({length} bars, min {p['cup_min']})")
                 continue
 
             lp, rp = high[li], high[ri]
             if not (lp * (1 - p["rim_down"]) <= rp <= lp * (1 + p["rim_up"])):
+                no(f"rims uneven (left {lp:.2f} vs right {rp:.2f})")
                 continue
 
             inside = slice(li + 1, ri)
@@ -109,19 +121,23 @@ def find_cup(df, p=P):
             cup_low = low[inside].min()
             lo_bar = li + 1 + int(np.argmin(low[inside]))
             if high[inside].max() > rim_hi * (1 + p["pierce"]):
+                no("price pierced above the rim mid-cup")
                 continue
 
             depth = (rim_hi - cup_low) / rim_hi
             if not (p["depth_min"] <= depth <= p["depth_max"]):
+                no(f"cup depth {depth*100:.1f}% outside {p['depth_min']*100:.0f}-{p['depth_max']*100:.0f}%")
                 continue
 
             pos = (lo_bar - li) / length               # where the low sits in the cup
             if not (0.15 <= pos <= 0.85):
+                no(f"cup low sits at {pos:.2f} of the way across (needs 0.15-0.85)")
                 continue
 
             third = cup_low + (rim_hi - cup_low) / 3
             if (close[inside] <= third).sum() / length < p["round_min"]:
-                continue                               # V-shaped, not a cup
+                no("V-shaped, not rounded enough")
+                continue
 
             if p["prior_pct"] > 0:
                 start = max(0, li - p["prior_look"])
@@ -129,7 +145,8 @@ def find_cup(df, p=P):
                     continue
                 prior_low = low[start:li].min()
                 if prior_low <= 0 or (lp - prior_low) / prior_low < p["prior_pct"]:
-                    continue                           # no advance before the base
+                    no("no 25% advance before the base")
+                    continue
 
             return dict(left=li, right=ri, buy=float(rp), cup_low=float(cup_low),
                         depth=float(depth), length=int(length))
