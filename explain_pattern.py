@@ -75,6 +75,22 @@ def screen_check(live, sym, min_rs=80):
     return all(bool(c[0]) for c in checks)
 
 
+def as_of(df, date):
+    """The data as it stood at the close of `date` - nothing after it.
+
+    "Why is this on the list today and not three days ago?" is answerable
+    only by re-running the CURRENT rules against the data as it was then.
+    Otherwise you cannot tell a rule change from a market change.
+    """
+    if not date:
+        return df
+    cut = pd.Timestamp(date)
+    idx = df.index
+    if getattr(idx, "tz", None) is not None:
+        cut = cut.tz_localize(idx.tz)
+    return df[idx <= cut + pd.Timedelta(hours=23, minutes=59)]
+
+
 def explain(sym, df, live, min_rs=80):
     print("=" * 78)
     print(f"{sym}")
@@ -193,6 +209,9 @@ def main():
     ap.add_argument("symbols", nargs="+")
     ap.add_argument("--source", default=LIVE)
     ap.add_argument("--min-rs", type=int, default=80)
+    ap.add_argument("--asof", default="",
+                    help="pretend it is this date (YYYY-MM-DD) and ignore every "
+                         "bar after it - shows WHEN a signal appeared")
     args = ap.parse_args()
 
     live = pd.read_csv(args.source)
@@ -214,6 +233,11 @@ def main():
                 print(f"{s}: no data came back.")
                 continue
             df = df.dropna(subset=["Close", "High", "Low"])
+            if args.asof:
+                before = len(df)
+                df = as_of(df, args.asof)
+                print(f"  [as of {args.asof}: {len(df)} bars, "
+                      f"{before - len(df)} later bars ignored]")
             explain(s, df, live, args.min_rs)
             print()
         except Exception as exc:

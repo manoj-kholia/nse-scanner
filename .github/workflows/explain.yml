@@ -10,6 +10,10 @@ on:
         description: "Symbols, space separated (e.g. MCX ICIL)"
         default: "MCX"
         required: true
+      asof:
+        description: "Pretend it is this date (YYYY-MM-DD), blank for today"
+        default: ""
+        required: false
 
 permissions:
   contents: read
@@ -29,7 +33,9 @@ jobs:
       - name: Explain
         run: |
           set -o pipefail
-          python explain_pattern.py ${{ inputs.symbols }} 2>&1 | tee explain.txt
+          ASOF=""
+          [ -n "${{ inputs.asof }}" ] && ASOF="--asof ${{ inputs.asof }}"
+          python explain_pattern.py ${{ inputs.symbols }} $ASOF 2>&1 | tee explain.txt
       - name: Put it in the run summary
         if: always()
         run: |
