@@ -24,14 +24,22 @@ def check(label, got, want, tol=None):
 
 
 def session(date, open_px, bars=75, open_vol=10000, bar_vol=5000,
-            drift=0.0, first_bar_range=0.004, start="09:15"):
-    """One NSE trading day of 5-minute bars."""
+            drift=0.0, first_bar_range=0.004, start="09:15", historic=True):
+    """One NSE trading day of 5-minute bars.
+
+    `historic=True` reproduces what Yahoo actually serves for a PAST session:
+    the 09:15 bar's volume rewritten to zero, with the real opening volume
+    sitting in the 09:20 bar. `historic=False` is how today looks while the
+    session is live - 09:15 carries its volume.
+    """
     idx = pd.date_range(f"{date} {start}", periods=bars, freq="5min", tz=it.IST)
     close = open_px * (1 + np.linspace(0, drift, bars))
     high = close * (1 + first_bar_range / 2)
     low = close * (1 - first_bar_range / 2)
     vol = np.full(bars, float(bar_vol))
-    vol[0] = float(open_vol)
+    vol[0] = 0.0 if historic else float(open_vol)
+    if len(vol) > 1:
+        vol[1] = float(open_vol)
     o = close.copy(); o[0] = open_px
     return pd.DataFrame({"Open": o, "High": high, "Low": low, "Close": close,
                          "Volume": vol}, index=idx)
@@ -47,7 +55,23 @@ def book(days, **kw):
 
 DATES = [f"2026-09-{d:02d}" for d in (1, 2, 3, 4, 7, 8, 9, 10, 11, 15, 16, 17, 18, 21, 22)]
 
-print("--- relative volume: today's open against its own history ---")
+print("--- THE 09:15 TRAP: Yahoo zeroes the opening bar once a day is history ---")
+# This is the bug that made the first live runs reject all 200 stocks: the
+# screen read only the 09:15 bar, which is real today and zero on every past
+# session, so it compared a number against a history of zeros.
+past = [(d, 100.0, {}) for d in DATES[:-1]]                      # 09:15 = 0
+live = [(DATES[-1], 102.0, dict(open_vol=50000, historic=False))]  # 09:15 real
+st = it.opening_stats(book(past + live))
+check("a live session against zeroed history still works", st is not None, True)
+check("  ...and the volume comes from the 09:20 window", st["RVol"], 5.0)
+check("  ...not from the 09:15 bar", st["Open_Vol"], 50000)
+
+# and the same data read AFTER the close, once today's 09:15 is zeroed too
+st2 = it.opening_stats(book(past + [(DATES[-1], 102.0, dict(open_vol=50000))]))
+check("same session re-read after the close gives the same answer",
+      st2["RVol"], st["RVol"])
+
+print("\n--- relative volume: today's open against its own history ---")
 # fifteen quiet sessions, then today opens on 5x the usual volume and gaps 2%
 quiet = [(d, 100.0, {}) for d in DATES[:-1]]
 today = [(DATES[-1], 102.0, dict(open_vol=50000))]
@@ -66,6 +90,11 @@ check("one past spike does not flatten today", st["RVol"], 5.0)
 print("\n--- gates that keep junk out ---")
 st_late = it.opening_stats(book(quiet + [(DATES[-1], 102.0, dict(start="11:30"))]))
 check("a session whose data starts at 11:30 is refused", st_late, None)
+
+why = {}
+it.opening_stats(book(quiet + [(DATES[-1], 102.0, dict(bars=1))]), why=why)
+check("run before the 09:20 bar prints -> says so, does not guess",
+      "has not printed" in why.get("reason", ""), True)
 
 short_hist = it.opening_stats(book([(d, 100.0, {}) for d in DATES[:3]]))
 check("three sessions is not enough history", short_hist, None)

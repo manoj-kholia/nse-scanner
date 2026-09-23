@@ -53,12 +53,25 @@ OUT_STATUS = os.path.join(HERE, "intraday_status.json")
 IST = "Asia/Kolkata"
 SESSION_OPEN = "09:15"
 
+# THE 09:15 BAR IS A TRAP. Verified against Yahoo's own feed on 23 Sep 2026
+# across RELIANCE, HDFCBANK, TATASTEEL, YESBANK, ANDHRSUGAR and MCX: the
+# 09:15-09:20 bar carries real volume DURING the session and is rewritten to
+# zero once the day is history. Prices in that bar stay correct throughout.
+#
+# So the two measurements have to come from different windows:
+#   price  - the 09:15 bar is the opening range, and is reliable
+#   volume - must start at 09:20, or today's live number gets compared against
+#            a history of zeros and every stock is rejected
+# Windows are selected by CLOCK TIME, not bar position, so a missing bar
+# shifts nothing.
+OR_START, OR_END = "09:15", "09:20"        # the opening range, for price
+VOL_START, VOL_END = "09:20", "09:25"      # the volume window, same times every day
+
 P = dict(
     universe_top=200,      # how many liquid names to pull intraday data for
     min_turnover_cr=5.0,   # average daily turnover, Rs crore - slippage floor
     min_price=50.0,        # below this the tick size eats the move
     max_price=20000.0,
-    open_bars=1,           # the opening range: 1 bar of 5 min = 09:15-09:20
     lookback=14,           # sessions of history for the relative-volume base
     min_rvol=2.0,          # "abnormal" opening volume starts here
     min_gap=0.5,           # % - needs some dislocation to be in play
@@ -108,6 +121,18 @@ def _sessions(df):
     return [(day, g) for day, g in d.groupby(d.index.date) if len(g)]
 
 
+def _window(g, start, end):
+    """Bars whose IST clock time falls in [start, end).
+
+    By clock rather than by position, so a session with a missing or extra
+    early bar still lines up with every other session.
+    """
+    if g is None or not len(g):
+        return g
+    t = g.index.strftime("%H:%M")
+    return g[(t >= start) & (t < end)]
+
+
 def _daily_atr(sessions, n=14):
     """ATR from intraday bars rolled up to daily - no second download needed."""
     if len(sessions) < 3:
@@ -151,33 +176,33 @@ def opening_stats(df, p=P, why=None):
     if len(prior) < 3:
         return no("fewer than 3 prior sessions")
 
-    def opening(g):
-        """The first `open_bars` bars of a session, if it really opened on time."""
-        first = g.index[0]
-        if f"{first.hour:02d}:{first.minute:02d}" > "09:30":   # late/partial data
-            return None
-        return g.iloc[:p["open_bars"]]
+    or_today = _window(today, OR_START, OR_END)
+    if or_today.empty:
+        return no(f"today's data starts at {today.index[0]:%H:%M}, past the open")
 
-    o_today = opening(today)
-    if o_today is None or o_today.empty:
-        return no(f"today's data starts at {today.index[0]:%H:%M}, not the open")
+    vol_today_bars = _window(today, VOL_START, VOL_END)
+    if vol_today_bars.empty:
+        return no(f"too early - the {VOL_START} bar has not printed yet")
 
-    base = [opening(g) for _, g in prior]
-    base_vols = [float(b["Volume"].sum()) for b in base if b is not None and len(b)]
+    # Like for like: the same clock window on every past session.
+    base_vols = [float(_window(g, VOL_START, VOL_END)["Volume"].sum())
+                 for _, g in prior]
+    base_vols = [v for v in base_vols if v > 0]
     if len(base_vols) < 3:
-        return no("too few past sessions have an opening bar")
+        return no(f"too few past sessions have a {VOL_START} bar with volume")
     median_open_vol = float(np.median(base_vols))
-    if median_open_vol <= 0:
-        return no("no opening volume in the history to compare against")
 
-    open_vol = float(o_today["Volume"].sum())
+    open_vol = float(vol_today_bars["Volume"].sum())
+    if open_vol <= 0:
+        return no(f"today's {VOL_START} bar has no volume yet")
+
     prev_close = float(prior[-1][1]["Close"].iloc[-1])
-    day_open = float(o_today["Open"].iloc[0])
+    day_open = float(or_today["Open"].iloc[0])
     if prev_close <= 0 or day_open <= 0:
         return no("bad price data")
 
     atr = _daily_atr(prior)
-    or_hi, or_lo = float(o_today["High"].max()), float(o_today["Low"].min())
+    or_hi, or_lo = float(or_today["High"].max()), float(or_today["Low"].min())
 
     return dict(
         Session=str(today_date),

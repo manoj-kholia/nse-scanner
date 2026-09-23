@@ -1,7 +1,6 @@
 name: Morning stocks in play
 
-# Runs just after the NSE open so the first 5-minute bar exists.
-# 03:50 UTC = 09:20 IST, Monday-Friday.
+# Runs a few minutes after the NSE open, once the 09:20 bar has closed.
 #
 # This is a SELECTION screen, not a tested system. The research it follows
 # (Zarattini/Barbon/Aziz) found the opening-range breakout itself returned
@@ -12,7 +11,10 @@ name: Morning stocks in play
 
 on:
   schedule:
-    - cron: "50 3 * * 1-5"
+    # 03:57 UTC = 09:27 IST. It has to be AFTER the 09:20-09:25 bar closes:
+    # Yahoo rewrites the 09:15 bar's volume to zero once a session is history,
+    # so relative volume is measured from 09:20 and that bar must exist first.
+    - cron: "57 3 * * 1-5"
   workflow_dispatch:
 
 permissions:
