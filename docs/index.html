@@ -464,7 +464,6 @@
       <label>Date<input type="date" id="jDate" required></label>
       <label>Symbol<input type="text" id="jSym" placeholder="BANDHANBNK" required></label>
       <label>Side<select id="jSide"><option value="L">Long</option><option value="S">Short</option></select></label>
-      <label>Product<select id="jProd" title="Delivery (CNC) pays STT of 0.1% on BOTH sides; intraday (MIS) pays 0.025% on the sell side only. Getting this wrong understates a delivery trade's costs by about three times."><option value="D">Delivery</option><option value="I">Intraday</option></select></label>
       <label>Qty<input type="number" id="jQty" min="1" step="1" required></label>
       <label>Entry<input type="number" id="jEntry" min="0" step="0.01" required></label>
       <label>Stop<input type="number" id="jStop" min="0" step="0.01" placeholder="optional"></label>
@@ -553,45 +552,25 @@ const tv = s => "https://www.tradingview.com/chart/?symbol=NSE:" + encodeURIComp
 // it again would count it twice.
 const RATES = {
   brokeragePct: 0.0003, brokerageCap: 20, sttSell: 0.00025,
-  exchange: 0.0000297, sebi: 0.000001, stampBuy: 0.00003, gst: 0.18,
-  // DELIVERY is charged very differently, and this page priced every trade as
-  // intraday. STT is 0.1% on BOTH sides for delivery against 0.025% on the
-  // sell side only for intraday, so a delivery round trip costs roughly three
-  // times what this was reporting - Rs 99.64 rather than Rs 36.06 on
-  // 10 shares at 3400. Net and R are the two numbers this journal exists to
-  // produce, and both were wrong for every delivery trade in it.
-  sttDelivery: 0.001, stampDelivery: 0.00015
+  exchange: 0.0000297, sebi: 0.000001, stampBuy: 0.00003, gst: 0.18
 };
-function tradeCosts(entry, exitPx, qty, side, product){
-  const cnc  = product === "D";            // delivery, not intraday
+function tradeCosts(entry, exitPx, qty, side){
   const buy  = (side === "L" ? entry : exitPx) * qty;
   const sell = (side === "L" ? exitPx : entry) * qty;
   const turn = buy + sell;
   const brokerage = Math.min(buy * RATES.brokeragePct, RATES.brokerageCap)
                   + Math.min(sell * RATES.brokeragePct, RATES.brokerageCap);
-  const stt = cnc ? (buy + sell) * RATES.sttDelivery : sell * RATES.sttSell;
+  const stt = sell * RATES.sttSell;
   const exch = turn * RATES.exchange;
   const sebi = turn * RATES.sebi;
-  const stamp = buy * (cnc ? RATES.stampDelivery : RATES.stampBuy);
+  const stamp = buy * RATES.stampBuy;
   const gst = (brokerage + exch + sebi) * RATES.gst;
   return brokerage + stt + exch + sebi + stamp + gst;
 }
 
 function computeTrade(t){
-  // An OPEN position has no exit yet. It used to be impossible to record one
-  // at all - the form refused to save without an exit price - so the journal
-  // could only ever describe the past, never what you are actually holding.
-  // Open rows carry their entry, stop and money-at-risk and nothing else;
-  // marking to market would need a live price this page does not have.
-  const open = t.exit == null || !(t.exit > 0);
-  if(open){
-    const risk = (t.stop != null && t.stop > 0)
-      ? Math.abs(t.entry - t.stop) * t.qty + tradeCosts(t.entry, t.entry, t.qty, t.side, t.product || "I")
-      : null;
-    return Object.assign({}, t, {open:true, gross:null, costs:null, net:null, risk, r:null});
-  }
   const gross = (t.exit - t.entry) * t.qty * (t.side === "L" ? 1 : -1);
-  const costs = tradeCosts(t.entry, t.exit, t.qty, t.side, t.product || "I");
+  const costs = tradeCosts(t.entry, t.exit, t.qty, t.side);
   const net = gross - costs;
   // R is the money truly at risk: the stop distance PLUS the costs you were
   // always going to pay. Sizing off the stop alone understates every loss.
@@ -600,7 +579,7 @@ function computeTrade(t){
     risk = Math.abs(t.entry - t.stop) * t.qty + costs;
     if(risk > 0) r = net / risk;
   }
-  return Object.assign({}, t, {open:false, gross, costs, net, risk, r});
+  return Object.assign({}, t, {gross, costs, net, risk, r});
 }
 
 function loadTrades(){
@@ -865,22 +844,11 @@ function cell(r, k){
     case "gap": return r.gap == null ? "–" :
       '<span class="' + sgn(r.gap) + '">' + (r.gap > 0 ? "+" : "") + r.gap.toFixed(2) + "%</span>";
     case "atr": case "irisk": return r[k] == null ? "–" : r[k].toFixed(2) + "%";
-    case "exit": {
-      // "Exit" means two different things in two different tables, and this
-      // switch serves both. In Play's exit is a RULE ("at the close"); the
-      // journal's is a PRICE, or nothing at all while a position is open. The
-      // In Play branch used to come first and swallowed the journal's, which
-      // is why logged trades read "at 190.82" instead of a price.
-      if(view === "log")
-        return r.open
-          ? '<span class="pill handle" title="Still open - no exit price yet, so there is no result to show.">OPEN</span>'
-          : inr(r.exit);
-      return r.exit == null ? "–" :
-        '<span class="exitrule" title="Square off at your broker\'s intraday cut-off. '
-        + 'Measured on 179 trades: holding to the close returned +0.132R, a 1R target '
-        + '-0.053R, a 2R target -0.001R. Capping the winners is what loses the money.">'
-        + "at " + esc(r.exit) + "</span>";
-    }
+    case "exit": return r.exit == null ? "–" :
+      '<span class="exitrule" title="Square off at your broker\'s intraday cut-off. '
+      + 'Measured on 179 trades: holding to the close returned +0.132R, a 1R target '
+      + '-0.053R, a 2R target -0.001R. Capping the winners is what loses the money.">'
+      + "at " + esc(r.exit) + "</span>";
     case "be": return r.be == null ? "–" :
       '<span class="mono">' + r.be.toFixed(3) + "%</span>";
     case "cva": {
@@ -898,11 +866,9 @@ function cell(r, k){
       'title="Log a trade in this stock, prefilled from the opening range">log</button>';
     case "date": return '<span class="mono">' + esc(r.date || "") + "</span>";
     case "sym": return '<span class="sym"><a href="' + tv(r.sym) + '" target="_blank" rel="noopener">' + esc(r.sym) + "</a></span>";
-    case "side": return '<span class="pill ' + (r.side === "L" ? "brk" : "handle") + '" title="' +
-      ((r.product || "I") === "D" ? "Delivery (CNC)" : "Intraday (MIS)") + '">' +
-      (r.side === "L" ? "LONG" : "SHORT") + ((r.product || "I") === "D" ? " \u00B7 CNC" : " \u00B7 MIS") + "</span>";
+    case "side": return '<span class="pill ' + (r.side === "L" ? "brk" : "handle") + '">' + (r.side === "L" ? "LONG" : "SHORT") + "</span>";
     case "qty": return '<span class="mono">' + (r.qty == null ? "\u2013" : r.qty.toLocaleString("en-IN")) + "</span>";
-    case "entry": return inr(r.entry);
+    case "entry": case "exit": return inr(r[k]);
     case "gross": case "net": return r[k] == null ? "\u2013" :
       '<span class="' + sgn(r[k]) + ' mono">' + (r[k] >= 0 ? "+" : "\u2212") + inr(Math.abs(r[k])).slice(1) + "</span>";
     case "costs": return r.costs == null ? "\u2013" : '<span class="mono">' + inr(r.costs) + "</span>";
@@ -1023,9 +989,7 @@ function marketBanner(m){
 
 function tiles(list){
   if(view === "log"){
-    const all = trades.map(computeTrade);
-    const t = all.filter(x => !x.open);      // only closed trades are results
-    const openN = all.length - t.length;
+    const t = trades.map(computeTrade);
     const wins = t.filter(x => x.net > 0);
     const gross = t.reduce((s,x) => s + Math.max(0, x.gross), 0);
     const costs = t.reduce((s,x) => s + x.costs, 0);
@@ -1036,8 +1000,7 @@ function tiles(list){
     // loss-makers paid an extra 57% on top of their losses.
     const share = gross > 0 ? (costs / gross * 100) : null;
     const t2 = [
-      ["Trades", t.length, wins.length + " won \u00B7 " + (t.length - wins.length) + " lost"
-        + (openN ? " \u00B7 " + openN + " still open" : "")],
+      ["Trades", t.length, wins.length + " won \u00B7 " + (t.length - wins.length) + " lost"],
       ["Win rate", t.length ? Math.round(wins.length / t.length * 100) + "%" : "\u2013",
        "a low rate is normal \u2014 the research variant won 24%"],
       ["Net after costs", '<span class="' + sgn(net) + '">' +
@@ -1209,14 +1172,13 @@ $("jform").addEventListener("submit", e => {
     date: $("jDate").value,
     sym: $("jSym").value.trim().toUpperCase(),
     side: $("jSide").value,
-    product: $("jProd").value,
     qty: num($("jQty").value),
     entry: num($("jEntry").value),
     stop: num($("jStop").value),
     exit: num($("jExit").value),
     note: $("jNote").value.trim()
   };
-  if(!t.sym || !t.qty || !t.entry) return;   // exit is optional: an open position
+  if(!t.sym || !t.qty || !t.entry || !t.exit) return;
   trades.push(t); saveTrades();
   ["jQty","jEntry","jStop","jExit","jNote"].forEach(id => $(id).value = "");
   $("jSym").value = ""; $("jSym").focus();
@@ -1237,7 +1199,6 @@ $("tbody").addEventListener("click", e => {
       const up = (row.gap ?? 0) >= 0;
       $("jSym").value = row.s;
       $("jSide").value = up ? "L" : "S";
-      $("jProd").value = "I";          // In Play is an intraday screen
       $("jEntry").value = (up ? row.orh : row.orl) ?? "";
       $("jStop").value  = (up ? row.ls : row.ss) ?? "";
       $("jQty").focus();
