@@ -1,7 +1,19 @@
 name: Why is this stock not on the list
 
 # Manual. Runs explain_pattern.py for one or more symbols and prints every
-# gate with its measured value against its limit. Commits nothing.
+# gate with its measured value against its limit.
+#
+# By default it commits nothing and the output goes to the run summary, which
+# is the right thing when a person is reading it in the browser.
+#
+# `commit` writes the same text to audit_report.txt and commits it. That is for
+# comparing the scanner against the TradingView script: the two read DIFFERENT
+# DATA FEEDS - Yahoo here, TradingView there - so the only way to tell a rule
+# bug from a feed difference is to put both sets of numbers side by side, and a
+# committed file can be fetched from raw.githubusercontent at an exact commit
+# SHA. Reading the run summary needs an authenticated API call, and fetching a
+# file by branch name has twice served a stale copy from the CDN that looked
+# fresh.
 
 on:
   workflow_dispatch:
@@ -14,14 +26,19 @@ on:
         description: "Pretend it is this date (YYYY-MM-DD), blank for today"
         default: ""
         required: false
+      commit:
+        description: "Also commit the output to audit_report.txt"
+        type: boolean
+        default: false
+        required: false
 
 permissions:
-  contents: read
+  contents: write
 
 jobs:
   explain:
     runs-on: ubuntu-latest
-    timeout-minutes: 10
+    timeout-minutes: 20
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
@@ -30,12 +47,40 @@ jobs:
           cache: pip
       - name: Install dependencies
         run: pip install -r requirements.txt
+
+      # The thresholds are printed with the result. Without them a report read
+      # a week later cannot be told apart from one produced under different
+      # rules, and that ambiguity has already cost us a wrong diagnosis once.
       - name: Explain
         run: |
           set -o pipefail
           ASOF=""
           [ -n "${{ inputs.asof }}" ] && ASOF="--asof ${{ inputs.asof }}"
-          python explain_pattern.py ${{ inputs.symbols }} $ASOF 2>&1 | tee explain.txt
+          echo "EXPLAIN $(TZ=Asia/Kolkata date +'%Y-%m-%d %H:%M IST')" > explain.txt
+          echo "commit  $GITHUB_SHA" >> explain.txt
+          echo "symbols ${{ inputs.symbols }}" >> explain.txt
+          echo "" >> explain.txt
+          echo "--- the rules this run enforced ---" >> explain.txt
+          python -c "import find_patterns as fp; [print(f'  {k:18} {fp.P[k]}') for k in sorted(fp.P)]" >> explain.txt
+          echo "" >> explain.txt
+          python explain_pattern.py ${{ inputs.symbols }} $ASOF 2>&1 | tee -a explain.txt
+
+      - name: Commit the report
+        if: ${{ always() && inputs.commit }}
+        run: |
+          cp explain.txt audit_report.txt
+          git config user.name  "nse-scanner"
+          git config user.email "actions@users.noreply.github.com"
+          git add audit_report.txt
+          git diff --staged --quiet && { echo "report unchanged"; exit 0; }
+          git commit -m "Explain $(TZ=Asia/Kolkata date +'%Y-%m-%d %H:%M IST')"
+          for attempt in 1 2 3; do
+            git push && exit 0
+            git fetch origin main
+            git rebase origin/main || { git rebase --abort; exit 1; }
+          done
+          exit 1
+
       - name: Put it in the run summary
         if: always()
         run: |
