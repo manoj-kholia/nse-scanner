@@ -22,7 +22,8 @@ IST = timezone(timedelta(hours=5, minutes=30))
 
 MAP = {
     "Symbol": "s", "Company": "n", "Session": "d", "RVol": "rv",
-    "Gap_pct": "gap", "ATR_pct": "atr", "Prev_Close": "pc", "Open": "o",
+    "Gap_pct": "gap", "Gap_Source": "gsrc", "ATR_pct": "atr",
+    "Prev_Close": "pc", "Open": "o",
     "OR_High": "orh", "OR_Low": "orl", "OR_Range_pct": "orr",
     "Long_Trigger": "lt", "Long_Stop": "ls",
     "Short_Trigger": "st", "Short_Stop": "ss",

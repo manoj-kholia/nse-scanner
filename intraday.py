@@ -158,7 +158,55 @@ def _daily_atr(sessions, n=14):
     return float(atr) if np.isfinite(atr) else None
 
 
-def opening_stats(df, p=P, why=None):
+def official_levels(daily, today_date):
+    """Yesterday's official close and today's official open, from the DAILY bar.
+
+    The 5-minute bars cannot give either of these, and for months this screen
+    took both from them:
+
+      * yesterday's last 5-minute bar closes at 15:25 and misses the closing
+        auction, so it is not the closing price;
+      * the first 5-minute bar's Open is the first print Yahoo happens to have,
+        not the opening auction print.
+
+    Both errors are the same size as the 0.5% gap gate they feed, which is how
+    MANINDS came to be published at a gap of -2.12% on a morning it actually
+    gapped +0.41%. Our OWN daily scan had the right previous close (986.70)
+    while this module used 1000.90 - the two halves of the same repository
+    disagreeing about one number by 1.4%.
+
+    The daily bar for the current session exists and updates live: its Open is
+    the opening auction price, which is exactly what a gap is measured from.
+
+    Returns (prev_close, day_open) with either as None when the data is not
+    there, so the caller can fall back and SAY it fell back.
+    """
+    if daily is None or not len(daily):
+        return None, None
+    d = daily.dropna(subset=["Open", "Close"])
+    if "Volume" in d.columns:
+        # Yahoo emits a flat zero-volume bar for exchange holidays; counting
+        # one as "yesterday" would take the close from the wrong session.
+        vol = pd.to_numeric(d["Volume"], errors="coerce").fillna(0)
+        flat = d["High"].to_numpy(float) == d["Low"].to_numpy(float)
+        d = d[~((vol <= 0).to_numpy() & flat)]
+    if not len(d):
+        return None, None
+
+    dates = [x.date() if hasattr(x, "date") else x for x in d.index]
+    today_rows = [i for i, x in enumerate(dates) if x == today_date]
+    prior_rows = [i for i, x in enumerate(dates) if x < today_date]
+
+    day_open = float(d["Open"].iloc[today_rows[0]]) if today_rows else None
+    prev_close = float(d["Close"].iloc[prior_rows[-1]]) if prior_rows else None
+    if day_open is not None and day_open <= 0:
+        day_open = None
+    if prev_close is not None and prev_close <= 0:
+        prev_close = None
+    return prev_close, day_open
+
+
+def opening_stats(df, p=P, why=None, daily=None):
     """Today's opening behaviour against its own recent history.
 
     Returns None when there is not enough history to make the comparison
@@ -206,8 +254,17 @@ def opening_stats(df, p=P, why=None):
     if open_vol <= 0:
         return no(f"today's {VOL_START} bar has no volume yet")
 
-    prev_close = float(prior[-1][1]["Close"].iloc[-1])
-    day_open = float(or_today["Open"].iloc[0])
+    # The official levels come from the daily bar. The 5-minute values are the
+    # fallback and are labelled as such wherever they are used, because they
+    # are wrong by the closing auction and the opening auction respectively.
+    prev_close, day_open = official_levels(daily, today_date)
+    gap_source = "daily bar"
+    if prev_close is None:
+        prev_close = float(prior[-1][1]["Close"].iloc[-1])
+        gap_source = "5-minute fallback"
+    if day_open is None:
+        day_open = float(or_today["Open"].iloc[0])
+        gap_source = "5-minute fallback"
     if prev_close <= 0 or day_open <= 0:
         return no("bad price data")
 
@@ -219,6 +276,7 @@ def opening_stats(df, p=P, why=None):
         Prev_Close=round(prev_close, 2),
         Open=round(day_open, 2),
         Gap_pct=round((day_open / prev_close - 1) * 100, 2),
+        Gap_Source=gap_source,
         Open_Vol=int(open_vol),
         RVol=round(open_vol / median_open_vol, 2),
         ATR=round(atr, 2) if atr else None,
@@ -300,6 +358,21 @@ def default_downloader(period="1mo", interval="5m"):
     return dl
 
 
+def default_daily_downloader(period="10d"):
+    """Daily bars, for the official open and previous close.
+
+    Ten days rather than two: exchange holidays, and Yahoo occasionally
+    withholds the most recent daily bar for a few minutes after the open.
+    """
+    import yfinance as yf
+
+    def dl(tickers):
+        return yf.download(tickers, period=period, interval="1d",
+                           group_by="ticker", auto_adjust=False, actions=False,
+                           progress=False, threads=True)
+    return dl
+
+
 def _pick(raw, tk):
     """One ticker's frame out of whatever shape the download returned."""
     if raw is None or not len(raw):
@@ -315,10 +388,14 @@ def _usable(df):
     return df is not None and len(df) and df["Close"].notna().any()
 
 
-def scan(symbols, downloader=None, batch_size=10, pause=1.0, p=P, log=print):
+def scan(symbols, downloader=None, batch_size=10, pause=1.0, p=P, log=print,
+         daily_downloader=None):
     """Opening stats for a list of symbols. Returns (rows, scanned, skipped)."""
     downloader = downloader or default_downloader()
+    if daily_downloader is None:
+        daily_downloader = default_daily_downloader()
     rows, scanned, skipped = [], 0, {}
+    fallbacks = []
 
     for start in range(0, len(symbols), batch_size):
         batch = symbols[start:start + batch_size]
@@ -330,6 +407,14 @@ def scan(symbols, downloader=None, batch_size=10, pause=1.0, p=P, log=print):
             raw = None
 
         frames = {s: _pick(raw, tk) for s, tk in zip(batch, tickers)}
+
+        # The gap is measured off the daily bar, not the 5-minute bars.
+        try:
+            draw = daily_downloader(tickers)
+        except Exception as exc:
+            log(f"  daily batch failed: {type(exc).__name__}: {exc}")
+            draw = None
+        dframes = {s: _pick(draw, tk) for s, tk in zip(batch, tickers)}
 
         # A batch that came back empty is usually the request, not the market.
         missing = [s for s, f in frames.items() if not _usable(f)]
@@ -347,13 +432,16 @@ def scan(symbols, downloader=None, batch_size=10, pause=1.0, p=P, log=print):
             try:
                 scanned += 1
                 why = {}
-                st = opening_stats(df, p, why) if _usable(df) else None
+                st = (opening_stats(df, p, why, daily=dframes.get(sym))
+                      if _usable(df) else None)
                 if st is None:
                     skipped.setdefault(why.get("reason", "no data returned"), []).append(sym)
                     continue
                 st["Symbol"] = sym
                 st.update(add_trade_plan(st, p))
                 st["Score"] = score(st, p)
+                if st.get("Gap_Source") != "daily bar":
+                    fallbacks.append(sym)
                 rows.append(st)
             except Exception as exc:
                 skipped.setdefault(f"error: {type(exc).__name__}", []).append(sym)
@@ -362,6 +450,10 @@ def scan(symbols, downloader=None, batch_size=10, pause=1.0, p=P, log=print):
         log(f"  {done}/{len(symbols)} fetched - {len(rows)} with usable opening data")
         if done < len(symbols):
             time.sleep(pause)
+    if fallbacks:
+        log(f"  NOTE: {len(fallbacks)} symbol(s) had no usable daily bar, so "
+            f"their gap came from 5-minute bars and is only approximate: "
+            + ", ".join(fallbacks[:8]) + ("..." if len(fallbacks) > 8 else ""))
     return rows, scanned, skipped
 
 
@@ -412,7 +504,8 @@ def write_status(scanned, usable, skipped, kept):
     return status
 
 
-COLS = ["Symbol", "Company", "Session", "Score", "RVol", "Gap_pct", "ATR_pct",
+COLS = ["Symbol", "Company", "Session", "Score", "RVol", "Gap_pct",
+        "Gap_Source", "ATR_pct",
         "Prev_Close", "Open", "OR_High", "OR_Low", "OR_Range_pct",
         "Long_Trigger", "Long_Stop", "Short_Trigger", "Short_Stop",
         "Stop_Dist", "Risk_pct", "Exit", "Breakeven_pct", "Cost_vs_ATR",

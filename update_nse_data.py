@@ -48,6 +48,94 @@ def log(msg):
         pass
 
 
+NSE_LIST_URL = "https://nsearchives.nseindia.com/content/equities/EQUITY_L.csv"
+
+
+def refresh_listing(path=SRC, url=NSE_LIST_URL, timeout=30, session=None):
+    """Pull the current NSE equity list over the committed snapshot.
+
+    EQUITY_L.csv was a file committed once and never touched again, and stale
+    here means INVISIBLE: on 24 Sep 2026 both screens missed SSRETAIL (+11% on
+    the day, gapped +3.1%) and HEROMOTORS (+15%, gapped +4.7%) for no reason
+    other than that both listed after that file was made. A scanner cannot
+    report a stock it has never heard of, so the failure is silent - which is
+    the worst kind this repository keeps finding.
+
+    It REFUSES to overwrite with anything that does not look like the real
+    list. NSE serves captchas, truncated bodies and HTML error pages to
+    non-browser clients, and writing one of those would quietly shrink the
+    universe to nothing: the same silent failure wearing a new hat. On any
+    doubt the old file stays and the run says so.
+
+    Returns (changed, message).
+    """
+    import io
+
+    import requests
+
+    try:
+        s = session or requests.Session()
+        s.headers.update({
+            # NSE refuses non-browser clients outright.
+            "User-Agent": ("Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) "
+                           "AppleWebKit/537.36 (KHTML, like Gecko) "
+                           "Chrome/124.0 Safari/537.36"),
+            "Accept": "text/csv,application/csv,*/*",
+            "Accept-Language": "en-US,en;q=0.9",
+        })
+        # the archive host will not serve the file without a session cookie
+        # from the main site first
+        try:
+            s.get("https://www.nseindia.com/", timeout=timeout)
+        except Exception:
+            pass
+        r = s.get(url, timeout=timeout)
+        if r.status_code != 200:
+            return False, f"NSE returned HTTP {r.status_code}; keeping the existing list"
+        body = r.content
+        if len(body) < 50_000:
+            return False, (f"NSE returned only {len(body)} bytes, which is not the "
+                           f"equity list; keeping the existing one")
+        fresh = pd.read_csv(io.BytesIO(body))
+        fresh.columns = [c.strip().upper() for c in fresh.columns]
+        if "SYMBOL" not in fresh.columns:
+            return False, "downloaded file has no SYMBOL column; keeping the existing list"
+        if len(fresh) < 1500:
+            return False, (f"downloaded list has only {len(fresh)} rows, far short of "
+                           f"the ~2,300 NSE lists; keeping the existing one")
+
+        old_syms = set()
+        if os.path.exists(path):
+            try:
+                old = pd.read_csv(path)
+                old.columns = [c.strip().upper() for c in old.columns]
+                old_syms = set(old["SYMBOL"].astype(str).str.strip())
+            except Exception:
+                pass
+        new_syms = set(fresh["SYMBOL"].astype(str).str.strip())
+
+        # A real listing file never loses a big chunk of its names overnight.
+        if old_syms and len(new_syms) < len(old_syms) * 0.9:
+            return False, (f"downloaded list has {len(new_syms)} symbols against "
+                           f"{len(old_syms)} in the current one - too big a drop to "
+                           f"trust; keeping the existing list")
+
+        with open(path, "wb") as fh:
+            fh.write(body)
+        added = sorted(new_syms - old_syms)
+        gone = sorted(old_syms - new_syms)
+        bits = [f"{len(new_syms)} symbols"]
+        if added:
+            bits.append(f"+{len(added)} new ({', '.join(added[:6])}"
+                        + ("..." if len(added) > 6 else "") + ")")
+        if gone:
+            bits.append(f"-{len(gone)} delisted")
+        return True, "listing refreshed: " + ", ".join(bits)
+    except Exception as exc:
+        return False, (f"could not refresh the listing ({type(exc).__name__}: {exc}); "
+                       f"keeping the existing one")
+
+
 def read_symbols(path, series_filter="EQ"):
     """Read the NSE list. Column names are padded with spaces in NSE's file."""
     df = pd.read_csv(path)
@@ -288,12 +376,20 @@ def main():
     ap.add_argument("--pause", type=float, default=1.5, help="seconds between batches")
     ap.add_argument("--limit", type=int, default=0, help="only the first N symbols (for testing)")
     ap.add_argument("--series", default="EQ", help="series filter, blank for all")
+    ap.add_argument("--no-refresh-listing", action="store_true",
+                    help="do not pull a fresh EQUITY_L.csv from NSE first")
     args = ap.parse_args()
 
     if not os.path.exists(args.source):
         raise SystemExit(f"Cannot find {args.source}")
 
     log("=" * 60)
+    # Do this BEFORE reading the list: a stock that is not in the file is not
+    # merely unranked, it is invisible, and nothing downstream can tell you so.
+    if not args.no_refresh_listing and args.source == SRC:
+        changed, msg = refresh_listing(args.source)
+        log(("  " if changed else "  NOTE: ") + msg)
+
     listing = read_symbols(args.source, args.series or None)
     if args.limit:
         listing = listing.head(args.limit)
