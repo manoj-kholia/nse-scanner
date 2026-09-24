@@ -639,11 +639,14 @@ function loadLive(recs){
 function loadSignals(recs){
   sigs = recs.map(r => ({
     s:r["Symbol"], n:r["Company"], stage:r["Stage"],
+    grp:r["Group"], gr:num(r["Group_Rank"]),
     bs:num(r["Base_Stage"]), eg:r["Earnings_Grade"], en:r["Earnings_Note"],
     epsq:num(r["EPS_Q_Growth"]), salesq:num(r["Sales_Q_Growth"]),
     epsa:num(r["EPS_A_Growth"]), roe:num(r["ROE"]),
     p:num(r["Last_Price"]), buy:num(r["Buy_Point"]), toBuy:num(r["Pct_To_Buy"]),
     stop:num(r["Stop"]), risk:num(r["Risk_pct"]), tgt:num(r["Target"]),
+    tgtMax:num(r["Target_Max"]), mm:num(r["Measured_Move"]),
+    hold:num(r["Hold_Days_Left"]),
     hd:num(r["Handle_Days"]), hlow:num(r["Handle_Low"]),
     hdep:num(r["Handle_Depth_pct"]), cdep:num(r["Cup_Depth_pct"]),
     cw:num(r["Cup_Weeks"]), vx:num(r["Vol_x_Avg"]), since:num(r["Days_Since_Breakout"])
@@ -709,6 +712,7 @@ const COLS_SIG = [
   {k:"s",     t:"Symbol"},
   {k:"stage", t:"Stage"},
   {k:"rs",    t:"RS Rating"},
+  {k:"gr",    t:"Group"},
   {k:"bs",    t:"Base"},
   {k:"eg",    t:"Earnings"},
   {k:"p",     t:"Price"},
@@ -716,7 +720,7 @@ const COLS_SIG = [
   {k:"toBuy", t:"% To Buy"},
   {k:"stop",  t:"Stop"},
   {k:"risk",  t:"Risk"},
-  {k:"tgt",   t:"Target"},
+  {k:"tgt",   t:"Sell +20%"},
   {k:"hd",    t:"Handle Day"},
   {k:"hdep",  t:"Handle %"},
   {k:"cdep",  t:"Cup %"},
@@ -764,7 +768,20 @@ function cell(r, k){
                 '</a><span class="co">' + esc(r.n || "") + "</span></span>";
     case "stage": return '<span class="pill ' + (r.stage === "BREAKOUT" ? "brk" : "handle") + '">' +
                 esc(r.stage === "BREAKOUT" ? "BREAKOUT" + (r.since ? " · " + r.since + "d" : " today") : "HANDLE") + "</span>";
-    case "p": case "h": case "l": case "buy": case "stop": case "tgt": return inr(r[k]);
+    case "p": case "h": case "l": case "buy": case "stop": return inr(r[k]);
+    case "tgt": {
+      // His profit rule is a percentage off the pivot, not a measured move.
+      // "Sell each stock when it was up 20% from the breakout point", with one
+      // exception: 20% inside eight weeks means hold the eight weeks.
+      if(r.tgt == null) return "–";
+      const t = "Sell into strength at +20% (" + inr(r.tgt) + "); +25% (" +
+        inr(r.tgtMax) + ") at the outside. Exception: if +20% arrives within 8 " +
+        "weeks of the breakout, hold the full 8 weeks and reassess" +
+        (r.hold != null ? " — " + r.hold + " session(s) of that still to run." : ".") +
+        (r.mm != null ? " (The measured move, " + inr(r.mm) +
+          ", is a chartists' convention, not O'Neil's rule.)" : "");
+      return '<span title="' + esc(t) + '">' + inr(r.tgt) + "</span>";
+    }
     case "c": return '<span class="' + sgn(r.c) + '">' + pct(r.c) + "</span>";
     case "fh": {
       // full bar = at the high, empty = 20% or more below it
@@ -785,6 +802,22 @@ function cell(r, k){
       return '<span class="' + (loose ? "warnrisk" : "") + '" title="' +
         (loose ? "Loose handle - the handle low (" + inr(r.hlow) + ") is more than 8% under the buy point, so the 7-8% rule sets this stop, not the chart."
                : "Handle low, which is tighter than the 8% rule.") + '">−' + r.risk.toFixed(1) + "%</span>";
+    }
+    case "gr": {
+      // O'Neil puts 37% of a stock's move on its subgroup and 12% on its major
+      // group, and his winners sat in the top 30% of groups. No rank is NOT a
+      // bad rank - the industry map fills in a few hundred symbols per run, so
+      // a blank means "not mapped yet", and it must not read like weakness.
+      if(r.gr == null)
+        return '<span class="bs" title="' + esc(r.grp ? "Industry: " + r.grp +
+          " - too few mapped members to rank it yet." : "Industry not mapped yet.") +
+          '">–</span>';
+      const lead = r.gr >= 70;
+      const why = (r.grp ? r.grp + " — " : "") + "group rank " + r.gr + "/99. " +
+        (lead ? "Top 30% of industries, where O'Neil's winners came from."
+              : "Outside the top 30%. About half a stock's move is its industry's.");
+      return '<span class="rs ' + (lead ? "hi" : "lo") + '" title="' + esc(why) + '">' +
+        r.gr + "</span>";
     }
     case "bs": {
       // O'Neil: the first base off a correction is the one that works. By the

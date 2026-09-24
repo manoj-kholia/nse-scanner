@@ -83,6 +83,14 @@ def pine_side(df, p=P):
                 if not (rp <= lp * (1 + p["rim_up"]) and rp >= lp * (1 - p["rim_down"])):
                     continue
 
+                # hi52All[bar_index - ri], i.e. ta.highest(high, overheadLook)
+                # as of bar ri. na until the window is full, which is why the
+                # guard is on ri + 1, not on max(0, ...).
+                hi52 = (max(high[ri + 1 - p["overhead_look"]:ri + 1])
+                        if p["overhead"] > 0 and ri + 1 >= p["overhead_look"] else None)
+                if hi52 is not None and hi52 > 0 and rp < hi52 * (1 - p["overhead"]):
+                    continue
+
                 rim_hi = max(lp, rp)
                 lo, lb_, hi_in = 1e12, ri, 0.0
                 for i in range(li + 1, ri):
@@ -130,7 +138,7 @@ def pine_side(df, p=P):
     h_days = last_bar - cupR
     h_low = min(low[cupR + 1:last_bar + 1]) if last_bar > cupR else float("nan")
     h_dep = (buy - h_low) / buy
-    tgt = buy + (buy - cup_lo)
+    tgt = buy * (1 + p["profit_take"])
     px = close[last_bar]
 
     bo_bar = None

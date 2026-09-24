@@ -159,6 +159,19 @@ def explain(sym, df, live, min_rs=80):
          f"{advance:.0f}%", f">= {fp.P['prior_pct']*100:.0f}%")
     line(True, "left rim vs right rim",
          f"{hi_a[li]:.2f} / {hi_a[rj]:.2f}", "within -8% / +5%")
+    # Overhead supply: everyone who bought above the buy point and is still
+    # under water is a seller waiting to get even. A cup can be textbook and
+    # still sit under a wall of them, because the rim test only compares the
+    # two rims with each other.
+    if fp.P["overhead"] > 0 and rj + 1 >= fp.P["overhead_look"]:
+        hi52 = float(hi_a[rj + 1 - fp.P["overhead_look"]:rj + 1].max())
+        under = (1 - cup["buy"] / hi52) * 100 if hi52 else 0.0
+        line(under <= fp.P["overhead"] * 100, "buy point near the 52w high",
+             f"{under:.0f}% under {hi52:.2f}",
+             f"<= {fp.P['overhead']*100:.0f}% under")
+    else:
+        print(f"    {'n/a ':<5} buy point vs the 52w high            "
+              f"{'under 252 bars':>14}   window not full yet")
 
     print("\n  STEP 3 - the handle")
     close = df["Close"].to_numpy(float)
@@ -210,7 +223,14 @@ def explain(sym, df, live, min_rs=80):
     if res:
         print(f"    LISTED as {res.get('Stage', 'a signal')}: "
               f"buy {res['Buy_Point']}, last {res['Last_Price']}, "
-              f"stage {res.get('Base_Stage')}, target {res.get('Target')}")
+              f"stage {res.get('Base_Stage')}")
+        print(f"    sell into strength {res.get('Target')} to {res.get('Target_Max')} "
+              f"(+{fp.P['profit_take']*100:.0f} to +{fp.P['profit_take_max']*100:.0f}% "
+              f"off the buy point - O'Neil's rule, not a measured move)")
+        print(f"    but if that arrives within {res.get('Hold_Days_Left')} more "
+              f"session(s), hold the full 8 weeks and reassess")
+        print(f"    (the measured move, {res.get('Measured_Move')}, is shown for "
+              f"comparison only - it is not a rule from the book)")
     else:
         print(f"    NOT LISTED - {reason}")
         print(f"    (last {px:.2f}, buy point {buy:.2f}, "

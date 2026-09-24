@@ -68,6 +68,15 @@ P = dict(
     round_min=0.41,
     prior_pct=0.25,      # advance required before the base
     prior_look=120,
+    # OVERHEAD SUPPLY. O'Neil: "they will never make the fatal mistake of
+    # buying a stock that has a large recent amount of overhead supply" - the
+    # people who bought at a higher price and are waiting to get out even. He
+    # allows a pivot 5-10% under the stock's former high; below that you are
+    # buying into a wall of sellers. The cup's own rim test cannot catch this,
+    # because it only compares the two rims with each other - a cup can be
+    # perfectly formed 30% below a peak the stock made eight months ago.
+    overhead=0.10,       # buy point may sit at most this far under the 52w high
+    overhead_look=252,   # ...measured over the 252 bars ending at the right rim
     handle_min=5,        # 1 week minimum
     handle_max=35,
     handle_depth=0.12,   # O'Neil's normal range tops out around 12%
@@ -78,6 +87,20 @@ P = dict(
     vol_len=50,
     max_ext=0.05,        # never chase more than this far past the buy point
     max_loss=0.08,       # O'Neil's hard stop: 7-8% below what you paid
+    # THE EXIT. O'Neil's profit rule is a percentage off the pivot, not a
+    # measured move: "sell each stock when it was up 20% from the breakout
+    # point" (ch.10), with one exception - "if the stock was so strong that it
+    # vaulted 20% in less than eight weeks, the stock had to be held at least
+    # eight weeks."
+    #
+    # We used to publish buy + (buy - cup_low), a measured move. That is a
+    # chartists' convention, not his rule, and it drifts with cup depth: a 12%
+    # cup produced a +13.6% target (selling below his threshold) and a 35% cup
+    # a +54% one (holding a winner back down waiting for a number he never
+    # endorsed). The depth of the base does not predict the size of the move.
+    profit_take=0.20,
+    profit_take_max=0.25,
+    hold_sessions=40,    # 8 weeks, for the "20% in under 8 weeks" exception
 )
 
 
@@ -131,6 +154,19 @@ def find_cup(df, p=P, why=None):
             if not (lp * (1 - p["rim_down"]) <= rp <= lp * (1 + p["rim_up"])):
                 no(f"rims uneven (left {lp:.2f} vs right {rp:.2f})")
                 continue
+
+            # Overhead supply: the buy point has to be near the stock's own
+            # 52-week high, not merely near the other rim.
+            # The window must be FULL before this can judge anything, because
+            # Pine's ta.highest returns na until it has its full length and a
+            # truncated window here would reject cups the chart accepts.
+            if p["overhead"] > 0 and ri + 1 >= p["overhead_look"]:
+                hi52 = float(high[ri + 1 - p["overhead_look"]:ri + 1].max())
+                if hi52 > 0 and rp < hi52 * (1 - p["overhead"]):
+                    no(f"overhead supply: buy point {rp:.2f} is "
+                       f"{(1 - rp / hi52) * 100:.0f}% under the 52w high {hi52:.2f} "
+                       f"(max {p['overhead'] * 100:.0f}%)")
+                    continue
 
             inside = slice(li + 1, ri)
             if inside.stop <= inside.start:
@@ -384,7 +420,12 @@ def evaluate(df, cup, p=P, breakout_window=5):
         Handle_Slope_t=slope_t,
         Handle_Vol=dry,
         Cup_Low=round(cup_low, 2),
-        Target=round(buy + (buy - cup_low), 2),
+        # O'Neil's exit, off the pivot - not off the depth of the cup.
+        Target=round(buy * (1 + p["profit_take"]), 2),
+        Target_Max=round(buy * (1 + p["profit_take_max"]), 2),
+        # Kept only so the old number is still visible for comparison. It is
+        # NOT a rule from the book and nothing keys off it.
+        Measured_Move=round(buy + (buy - cup_low), 2),
         Vol_x_Avg=round(vol[last] / avg_vol[last], 2) if avg_vol[last] else None,
         Above_50DMA="Yes" if not np.isnan(sma50[last]) and px > sma50[last] else "No",
     )
@@ -405,10 +446,15 @@ def evaluate(df, cup, p=P, breakout_window=5):
             return None, "extended past the buy point"
         entry = float(close[bo])
         stop = oneil_stop(entry, h_low)
+        # The 8-week clock. If +20% arrives before this many sessions have
+        # passed since the breakout, O'Neil's exception says hold the full
+        # eight weeks and reassess rather than taking the 20%.
+        hold_left = max(0, p["hold_sessions"] - int(since))
         return dict(Stage="BREAKOUT", Days_Since_Breakout=int(since),
                     Breakout_Price=round(entry, 2),
                     Stop=round(stop, 2),
                     Risk_pct=round((1 - stop / entry) * 100, 1),
+                    Hold_Days_Left=hold_left,
                     Pct_To_Buy=round((buy / px - 1) * 100, 2), **common), None
 
     # no breakout yet - is the handle still alive?
@@ -423,6 +469,7 @@ def evaluate(df, cup, p=P, breakout_window=5):
     return dict(Stage="HANDLE FORMING", Days_Since_Breakout=None,
                 Breakout_Price=None, Stop=round(stop, 2),
                 Risk_pct=round((1 - stop / buy) * 100, 1),
+                Hold_Days_Left=p["hold_sessions"],
                 Pct_To_Buy=round((buy / px - 1) * 100, 2), **common), None
 
 
@@ -548,10 +595,12 @@ def scan(symbols, downloader=None, batch_size=60, pause=1.5, period="2y",
     return hits, scanned, rejected
 
 
-COLS = ["Symbol", "Company", "Stage", "RS_Rating", "Base_Stage",
+COLS = ["Symbol", "Company", "Stage", "RS_Rating", "Group", "Group_Rank",
+        "Base_Stage",
         "Earnings_Grade", "EPS_Q_Growth", "Sales_Q_Growth", "EPS_A_Growth", "ROE",
         "Last_Price", "Buy_Point",
-        "Pct_To_Buy", "Stop", "Risk_pct", "Target", "Handle_Days",
+        "Pct_To_Buy", "Stop", "Risk_pct", "Target", "Target_Max",
+        "Measured_Move", "Hold_Days_Left", "Handle_Days",
         "Handle_Low", "Handle_Depth_pct",
         "Handle_Slope", "Handle_Vol", "Cup_Depth_pct", "Cup_Weeks", "Cup_Low",
         "Vol_x_Avg", "Above_50DMA", "Days_Since_Breakout", "Breakout_Price",
@@ -617,6 +666,11 @@ def main():
                     help="drop bases later than this stage (0 = flag only, never drop)")
     ap.add_argument("--no-earnings", action="store_true",
                     help="skip the CANSLIM C/A lookup for the signals")
+    ap.add_argument("--no-groups", action="store_true",
+                    help="skip the industry-group rank entirely")
+    ap.add_argument("--group-budget", type=int, default=250,
+                    help="uncached symbols to look up for the industry map this run "
+                         "(0 = rank from the cache as it stands, fetch nothing)")
     ap.add_argument("--require-earnings", action="store_true",
                     help="drop signals whose earnings FAIL O'Neil's C/A thresholds")
     ap.add_argument("--batch-size", type=int, default=60)
@@ -679,6 +733,35 @@ def main():
             print(f"\nDropped {int(late.sum())} signal(s) past stage {args.max_stage}: "
                   + ", ".join(df.loc[late, "Symbol"]))
             df = df[~late].reset_index(drop=True)
+
+    # O'Neil's group test. He puts 37% of a stock's move on its subgroup and
+    # 12% on its major group, and his winners sat in the top third of groups.
+    # Flagged, never dropped: the industry map is incomplete by design (it
+    # fills in a few hundred symbols a run) and a rank we cannot compute must
+    # not read as weakness.
+    if not args.no_groups and len(df):
+        try:
+            import industry_groups
+            cache = industry_groups.load_cache()
+            if args.group_budget:
+                cache = industry_groups.refresh(
+                    live["Symbol"].dropna().astype(str).tolist(),
+                    cache, budget=args.group_budget)
+            df = industry_groups.annotate(df, live, cache)
+            ranked = df["Group_Rank"].notna()
+            if ranked.any():
+                lag = ranked & (df["Group_Rank"] < industry_groups.LEADING)
+                print(f"\nIndustry groups: {int(ranked.sum())}/{len(df)} signal(s) "
+                      f"in a rankable group, {int(lag.sum())} outside the top 30%")
+                for _, r in df[ranked].iterrows():
+                    mark = "lagging group" if r["Group_Rank"] < industry_groups.LEADING else "leading group"
+                    print(f"  {r['Symbol']:<12} {int(r['Group_Rank']):>3}  "
+                          f"{mark:<14} {r['Group']}")
+            else:
+                print("\nIndustry groups: none of today's signals are in a group "
+                      "with enough mapped members to rank yet.")
+        except Exception as exc:
+            print(f"  industry groups unavailable ({type(exc).__name__}: {exc})")
 
     # O'Neil's C and A. Only the signals, so it is a few lookups, not 2,300.
     if not args.no_earnings and len(df):

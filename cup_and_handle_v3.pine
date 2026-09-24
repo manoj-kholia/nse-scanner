@@ -58,6 +58,8 @@ maxDepth  = input.float(35.0, "Max cup depth %", group=gC) / 100
 rimDown   = input.float(8.0,  "Right rim may be this % BELOW left rim", group=gC) / 100
 rimUp     = input.float(5.0,  "Right rim may be this % ABOVE left rim", group=gC) / 100
 pierceTol = input.float(2.0,  "Bars inside cup may pierce the rim by %", group=gC) / 100
+overhead  = input.float(10.0, "Buy point may sit this % under the 52w high", group=gC, tooltip="Overhead supply. Everyone who bought above the buy point and is still under water will sell to get even, and that wall of stock is what breakouts fail into. O'Neil allows a pivot 5-10% below the stock's former high. The rim test cannot catch this: it only compares the two rims with each other, so a textbook cup can sit 30% below a peak the stock made eight months ago. 0 turns the check off.") / 100
+overheadLook = input.int(252, "...measured over this many bars", minval=60, maxval=400, group=gC)
 minRound  = input.float(41.0, "Min shape score (mean depth of the closes)", group=gC, tooltip="mean( (rim high - close) / (rim high - cup low) ) across the cup. A U spends most of its bars near the bottom so the mean depth is high; a V passes through once. This replaced a COUNT of closes in the bottom third, which was discontinuous - one bar moving a rupee across the line moved the old score by 1/length, and that alone made this script and the scanner disagree about SPLPETRO (0.27 here vs 0.32 there, against a 0.30 cutoff, on a cup whose rims and low matched to the paisa). Measured: sharp spike V 0.05, late V 0.33, wide straight V 0.49, rounded U 0.51, flat saucer 0.76. Under per-bar jitter this moves at most 0.002 against 0.033 for the old count. It still cannot separate a wide V from a U - those are 0.016 apart - so look at the chart when the score lands near 0.50.") / 100
 
 gH = "3. Handle"
@@ -74,8 +76,10 @@ volLen   = input.int(50,    "Volume average length", group=gB)
 maxExt   = input.float(5.0, "Never chase more than this % past the buy point", group=gB) / 100
 boWindow = input.int(5,     "Keep reporting a breakout for this many sessions", minval=1, maxval=20, group=gB)
 
-gX = "5. Stop"
+gX = "5. Stop and target"
 maxLoss = input.float(8.0, "O'Neil hard stop, % below your entry", group=gX, tooltip="The handle low is the structural level, and it is the right stop only when it is TIGHTER than 8%. When the handle is loose, a 'stop' at the handle low quietly commits you to a 10-12% loss.") / 100
+takePct = input.float(20.0, "Sell into strength at this % off the buy point", group=gX, tooltip="O'Neil's profit rule is a percentage off the pivot, not a measured move: 'sell each stock when it was up 20% from the breakout point'. One exception - if 20% arrives within eight weeks of the breakout, hold the eight weeks and reassess. The measured move (buy + cup depth) is still shown for reference, but it is a chartists' convention, not his rule, and it drifts with the depth of the base: a 12% cup would set a +14% target, a 35% cup a +54% one.") / 100
+takeMax = input.float(25.0, "...and no later than this %", group=gX) / 100
 
 gV = "6. Display"
 showCup   = input.bool(true, "Draw the cup outline", group=gV)
@@ -86,6 +90,11 @@ tblPos    = input.string("top right", "Verdict position", options=["top right", 
 avgVol = ta.sma(volume, volLen)
 sma50  = ta.sma(close, 50)
 sma200 = ta.sma(close, 200)
+// Computed on EVERY bar at global scope, so hi52All[offset] is a real value.
+// A user-defined function that history-references its argument would build its
+// own series only on the bars where it runs - that is the bug that made every
+// lookup in this script return na before.
+hi52All = ta.highest(high, overheadLook)
 
 // Is the newest bar still being traded? barstate.isrealtime stays true after
 // the close, right up until the next session opens, so testing it alone leaves
@@ -240,6 +249,17 @@ if barstate.islast
                     miss := "rims uneven (left " + str.tostring(lp, format.mintick) + " vs right " + str.tostring(rp, format.mintick) + ")"
                     continue
 
+                // Overhead supply. ta.highest is na until its window is full,
+                // and the Python side skips this gate on the same condition,
+                // so the two cannot disagree on the left edge of the chart.
+                float hi52 = overhead > 0 ? hi52All[bar_index - (ri)] : na
+                if not na(hi52) and hi52 > 0 and rp < hi52 * (1 - overhead)
+                    if firstRim and 3 > nearRank
+                        nearRank := 3
+                        nearMiss := "buy point " + str.tostring(rp, format.mintick) + " is " + str.tostring((1 - rp / hi52) * 100, "#") + "% under the 52w high " + str.tostring(hi52, format.mintick) + " - overhead supply"
+                    miss := "overhead supply: buy point " + str.tostring(rp, format.mintick) + " is " + str.tostring((1 - rp / hi52) * 100, "#") + "% under the 52w high " + str.tostring(hi52, format.mintick)
+                    continue
+
                 float rimHi = math.max(lp, rp)
                 float lo    = 1e12
                 int   lb_   = ri
@@ -253,22 +273,22 @@ if barstate.islast
                     hiIn := math.max(hiIn, hv)
 
                 if hiIn > rimHi * (1 + pierceTol)
-                    if firstRim and 3 > nearRank
-                        nearRank := 3
+                    if firstRim and 4 > nearRank
+                        nearRank := 4
                         nearMiss := "price pierced above the rim mid-cup"
                     miss := "price pierced above the rim mid-cup"
                     continue
                 float dep = (rimHi - lo) / rimHi
                 if dep < minDepth or dep > maxDepth
-                    if firstRim and 4 > nearRank
-                        nearRank := 4
+                    if firstRim and 5 > nearRank
+                        nearRank := 5
                         nearMiss := "cup depth " + str.tostring(dep * 100, "#.#") + "% outside " + str.tostring(minDepth * 100, "#") + "-" + str.tostring(maxDepth * 100, "#") + "%"
                     miss := "cup depth " + str.tostring(dep * 100, "#.#") + "% outside " + str.tostring(minDepth * 100, "#") + "-" + str.tostring(maxDepth * 100, "#") + "%"
                     continue
                 float pp = (lb_ - li) * 1.0 / len
                 if pp < 0.15 or pp > 0.85
-                    if firstRim and 5 > nearRank
-                        nearRank := 5
+                    if firstRim and 6 > nearRank
+                        nearRank := 6
                         nearMiss := "cup low sits " + str.tostring(pp, "#.##") + " across (needs 0.15-0.85)"
                     miss := "cup low sits at " + str.tostring(pp, "#.##") + " of the way across (needs 0.15-0.85)"
                     continue
@@ -281,8 +301,8 @@ if barstate.islast
                     acc += (rimHi - close[bar_index - (i)]) / span
                 float rnd = acc / (ri - li - 1)
                 if rnd < minRound
-                    if firstRim and 6 > nearRank
-                        nearRank := 6
+                    if firstRim and 7 > nearRank
+                        nearRank := 7
                         nearMiss := "shape " + str.tostring(rnd, "#.###") + " is below the " + str.tostring(minRound, "#.##") + " cutoff (a V, not a U)"
                     miss := "V-shaped, shape " + str.tostring(rnd, "#.###")
                     continue
@@ -299,8 +319,8 @@ if barstate.islast
                         continue
                     adv := (lp - pLo) / pLo
                     if adv < priorPct
-                        if firstRim and 7 > nearRank
-                            nearRank := 7
+                        if firstRim and 8 > nearRank
+                            nearRank := 8
                             nearMiss := "only " + str.tostring(adv * 100, "#") + "% advance before the base, needs " + str.tostring(priorPct * 100, "#") + "%"
                         miss := "no " + str.tostring(priorPct * 100, "#") + "% advance before the base (" + str.tostring(adv * 100, "#") + "%)"
                         continue
@@ -332,6 +352,8 @@ if barstate.islast
     float  slopeT = na
     float  stop_  = na
     float  tgt    = na
+    float  tgtMax = na
+    float  mmove  = na
     int    boBar  = na
     int    since  = na
     float  px     = close[bar_index - (lastBar)]
@@ -342,7 +364,9 @@ if barstate.islast
         for i = cupR + 1 to lastBar
             hLow := math.min(hLow, low[bar_index - (i)])
         hDep := (buy - hLow) / buy
-        tgt  := buy + (buy - cupLo)
+        tgt    := buy * (1 + takePct)
+        tgtMax := buy * (1 + takeMax)
+        mmove  := buy + (buy - cupLo)
 
         // breakout_index(): first qualifying breakout after the right rim
         for i = cupR + 1 to lastBar
@@ -459,7 +483,7 @@ if barstate.islast
         array.push(lvlLines, line.new(cupR, tgt,   x2, tgt,   color=color.green,  width=1, style=line.style_dashed))
         array.push(tags, label.new(x2, buy,   "Buy "    + str.tostring(buy,   format.mintick), style=label.style_label_left, color=color.orange, textcolor=color.white, size=size.small))
         array.push(tags, label.new(x2, stop_, "Stop "   + str.tostring(stop_, format.mintick), style=label.style_label_left, color=color.red,    textcolor=color.white, size=size.small))
-        array.push(tags, label.new(x2, tgt,   "Target " + str.tostring(tgt,   format.mintick), style=label.style_label_left, color=color.green,  textcolor=color.white, size=size.small))
+        array.push(tags, label.new(x2, tgt,   "Sell +" + str.tostring(takePct * 100, "#") + "%  " + str.tostring(tgt, format.mintick), style=label.style_label_left, color=color.green,  textcolor=color.white, size=size.small))
         if not na(boBar)
             array.push(tags, label.new(boBar, low[bar_index - (boBar)], "BREAKOUT\n" + str.tostring(close[bar_index - (boBar)], format.mintick), style=label.style_label_up, color=color.green, textcolor=color.white, size=size.small))
 
@@ -490,7 +514,9 @@ if barstate.islast
             if stage != "NONE"
                 r := vrow(verdict, r, "buy point",    str.tostring(buy,   format.mintick), "", true)
                 r := vrow(verdict, r, "stop",         str.tostring(stop_, format.mintick) + "  (-" + str.tostring((1 - stop_ / (na(boBar) ? buy : close[bar_index - (boBar)])) * 100, "#.#") + "%)", "", true)
-                r := vrow(verdict, r, "target",       str.tostring(tgt,   format.mintick) + "  (+" + str.tostring((tgt / buy - 1) * 100, "#.#") + "%)", "", true)
+                r := vrow(verdict, r, "sell into strength", str.tostring(tgt, format.mintick) + " to " + str.tostring(tgtMax, format.mintick), "+" + str.tostring(takePct * 100, "#") + "-" + str.tostring(takeMax * 100, "#") + "%", true)
+                r := vrow(verdict, r, "8-week rule",  "hold 40 sessions if +" + str.tostring(takePct * 100, "#") + "% comes sooner", "", true)
+                r := vrow(verdict, r, "measured move", str.tostring(mmove, format.mintick) + "  (+" + str.tostring((mmove / buy - 1) * 100, "#.#") + "%)", "not an O'Neil rule", true)
             r := vrow(verdict, r, "RS Rating",        "not available", "dashboard needs 80+", true)
 
 plot(sma50,  "50 SMA",  color=color.new(color.blue, 40))

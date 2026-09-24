@@ -88,10 +88,20 @@ After that it runs itself every weekday at 18:30 IST.
 | **L** | Leader, not laggard | RS Rating 80+ |
 | **I** | Institutional sponsorship | **not possible** on free NSE data |
 | **M** | Market direction | `market_filter.py` |
+| — | Industry group strength | `industry_groups.py` — O'Neil puts 37% of a stock's move on its subgroup and 12% on its major group |
 
 Base stage counting sits alongside these: the first base after a deep
 correction is the one that works, and a 3rd or 4th stage base is flagged as
 higher risk.
+
+**[ONEIL_AUDIT.md](ONEIL_AUDIT.md) is the honest version of this table.** It
+goes through the 1995 edition rule by rule and says which ones the code
+actually enforces, which thresholds are looser than the book, which come from a
+later edition, and what is still missing — ranked. Read it before trusting any
+signal here. The short version of what it found: the exit was not O'Neil's
+(fixed), the buy point was never checked against the 52-week high (fixed), the
+industry group was not checked at all (fixed), and the annual-earnings test is
+still weaker than his.
 
 ## The O'Neil rules this enforces
 

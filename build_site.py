@@ -29,12 +29,14 @@ SCREEN_MAP = {
 }
 SIG_MAP = {
     "Symbol": "s", "Company": "n", "Stage": "stage", "RS_Rating": "rs",
+    "Group": "grp", "Group_Rank": "gr",
     "Base_Stage": "bs", "Earnings_Grade": "eg", "Earnings_Note": "en",
     "EPS_Q_Growth": "epsq", "Sales_Q_Growth": "salesq",
     "EPS_A_Growth": "epsa", "ROE": "roe",
     "Last_Price": "p",
     "Buy_Point": "buy", "Pct_To_Buy": "toBuy", "Stop": "stop",
-    "Risk_pct": "risk", "Target": "tgt",
+    "Risk_pct": "risk", "Target": "tgt", "Target_Max": "tgtMax",
+    "Measured_Move": "mm", "Hold_Days_Left": "hold",
     "Handle_Days": "hd", "Handle_Low": "hlow", "Handle_Depth_pct": "hdep",
     "Cup_Depth_pct": "cdep",
     "Cup_Weeks": "cw", "Vol_x_Avg": "vx", "Days_Since_Breakout": "since",
