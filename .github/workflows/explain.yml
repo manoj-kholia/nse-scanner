@@ -31,6 +31,15 @@ on:
         type: boolean
         default: false
         required: false
+      history:
+        description: "Also list every PAST cup-and-handle and what happened to it"
+        type: boolean
+        default: false
+        required: false
+      period:
+        description: "How far back the history walk looks (e.g. 2y, 5y, 10y)"
+        default: "5y"
+        required: false
 
 permissions:
   contents: write
@@ -64,6 +73,18 @@ jobs:
           python -c "import find_patterns as fp; [print(f'  {k:18} {fp.P[k]}') for k in sorted(fp.P)]" >> explain.txt
           echo "" >> explain.txt
           python explain_pattern.py ${{ inputs.symbols }} $ASOF 2>&1 | tee -a explain.txt
+
+      # The live verdict describes ONE base. This walks the whole history and
+      # says what these same rules would have done before today - which is the
+      # only way to see whether a stock's bases have been working.
+      - name: Past setups
+        if: ${{ inputs.history }}
+        run: |
+          set -o pipefail
+          echo "" >> explain.txt
+          echo "=== PAST SETUPS (${{ inputs.period }}) ===" >> explain.txt
+          python history_scan.py ${{ inputs.symbols }} \
+            --period "${{ inputs.period }}" 2>&1 | tee -a explain.txt
 
       - name: Commit the report
         if: ${{ always() && inputs.commit }}
