@@ -1,0 +1,325 @@
+EXPLAIN 2026-09-24 08:57 IST
+commit  811bdd961e9365fe3946edb083cab3655c3aa7c0
+symbols NPST SOMANYCERA MCX SPLPETRO ANDHRSUGAR MANINDS OPTIEMUS SUBEXLTD MARINE SANSERA
+
+--- the rules this run enforced ---
+  base_min           35
+  cup_max            250
+  cup_min            30
+  depth_max          0.35
+  depth_min          0.12
+  handle_depth       0.12
+  handle_max         35
+  handle_min         5
+  handle_slope       0.0
+  handle_slope_t     1.0
+  handle_vol         1.0
+  hold_sessions      40
+  max_ext            0.05
+  max_loss           0.08
+  overhead           0.1
+  overhead_look      252
+  pierce             0.02
+  piv                5
+  prior_look         120
+  prior_pct          0.25
+  profit_take        0.2
+  profit_take_max    0.25
+  rim_down           0.08
+  rim_up             0.05
+  round_min          0.41
+  vol_len            50
+  vol_mult           1.4
+
+2026-09-24 03:27  explaining NPST, SOMANYCERA, MCX, SPLPETRO, ANDHRSUGAR, MANINDS, OPTIEMUS, SUBEXLTD, MARINE, SANSERA
+
+==============================================================================
+NPST
+==============================================================================
+
+  STEP 1 - is it a candidate at all?
+    PASS  enough history                                   250 bars   needs >= 120
+    PASS  above the 200 DMA                          1844.70 vs 1382.97   needs price above
+    PASS  above the 50 DMA                           1844.70 vs 1631.14   needs price above
+    PASS  within 15% of the 20-week high                     -4.62%   needs >= -15%
+    PASS  liquid enough                                     223,202   needs >= 50,000
+    PASS  not a penny stock                                 1844.70   needs >= 20
+    PASS  RS Rating (O'Neil's leadership line)                   85   needs >= 80
+
+  (4 zero-volume holiday bar(s) dropped - Yahoo emits a flat
+   bar for days the exchange was shut, and counting one as a session
+   shifts every pivot window and handle age by a day)
+
+  STEP 2 - is there a cup?   [494 daily bars]
+    No valid cup. The near misses, most common first:
+         5x  overhead supply: buy point 1775.00 is 20% under the 52w high 2208.60 (max 10%)
+         5x  overhead supply: buy point 1764.80 is 26% under the 52w high 2388.30 (max 10%)
+         3x  overhead supply: buy point 1686.90 is 29% under the 52w high 2388.30 (max 10%)
+         2x  cup too short (28 bars, min 30)
+         1x  cup too short (7 bars, min 30)
+         1x  cup too short (16 bars, min 30)
+
+==============================================================================
+SOMANYCERA
+==============================================================================
+
+  STEP 1 - is it a candidate at all?
+    PASS  enough history                                   250 bars   needs >= 120
+    PASS  above the 200 DMA                          596.30 vs 463.66   needs price above
+    PASS  above the 50 DMA                           596.30 vs 532.58   needs price above
+    PASS  within 15% of the 20-week high                     -0.95%   needs >= -15%
+    PASS  liquid enough                                     123,395   needs >= 50,000
+    PASS  not a penny stock                                  596.30   needs >= 20
+    PASS  RS Rating (O'Neil's leadership line)                   85   needs >= 80
+
+  (4 zero-volume holiday bar(s) dropped - Yahoo emits a flat
+   bar for days the exchange was shut, and counting one as a session
+   shifts every pivot window and handle age by a day)
+
+  STEP 2 - is there a cup?   [494 daily bars]
+    cup found: 36 bars (7.2 weeks), depth 17.5%, buy point 576.80, cup low 476.10
+
+    what SHAPE is it?
+    PASS  shape (mean depth of the closes)                    0.601   needs >= 0.41
+          reference: sharp spike V 0.05, late V 0.33,
+                     wide straight V 0.49, rounded U 0.51, saucer 0.76
+    PASS  low sits mid-cup, not at one end              0.28 across   needs 0.15-0.85
+    PASS  advance before the base                               66%   needs >= 25%
+    PASS  left rim vs right rim                      550.65 / 576.80   needs within -8% / +5%
+    PASS  buy point near the 52w high                0% under 576.80   needs <= 10% under
+
+  STEP 3 - the handle
+    (broke out 1 session(s) ago at bar 492; the handle
+     is measured up to that bar, not through it)
+    PASS  cup + handle length                               49 bars   needs >= 35
+    PASS  handle age                                        13 days   needs >= 5
+    PASS  handle not expired                                13 days   needs <= 35
+    PASS  handle depth                                         8.2%   needs <= 12%
+    PASS  handle drifts DOWN, not up                    +0.039%/day   needs <= 0.0
+    PASS    ...and the rise beats its own noise             t +0.33   needs <= 1.0 is flat
+    PASS  volume dried up in the handle                   0.48x avg   needs <= 1.0x
+    PASS  not extended past the buy point            594.75 vs 576.80   needs <= 605.64
+
+  STEP 4 - what the scanner concludes
+    LISTED as BREAKOUT: buy 576.8, last 594.75, stage 1
+    sell into strength 692.16 to 721.0 (+20 to +25% off the buy point - O'Neil's rule, not a measured move)
+    but if that arrives within 39 more session(s), hold the full 8 weeks and reassess
+    (the measured move, 677.5, is shown for comparison only - it is not a rule from the book)
+
+==============================================================================
+MCX
+==============================================================================
+
+  STEP 1 - is it a candidate at all?
+    PASS  enough history                                   252 bars   needs >= 120
+    PASS  above the 200 DMA                          3374.00 vs 2726.30   needs price above
+    PASS  above the 50 DMA                           3374.00 vs 3031.06   needs price above
+    PASS  within 15% of the 20-week high                     -3.05%   needs >= -15%
+    PASS  liquid enough                                   1,781,467   needs >= 50,000
+    PASS  not a penny stock                                 3374.00   needs >= 20
+    PASS  RS Rating (O'Neil's leadership line)                   85   needs >= 80
+
+  (6 zero-volume holiday bar(s) dropped - Yahoo emits a flat
+   bar for days the exchange was shut, and counting one as a session
+   shifts every pivot window and handle age by a day)
+
+  STEP 2 - is there a cup?   [495 daily bars]
+    cup found: 77 bars (15.4 weeks), depth 26.3%, buy point 3398.00, cup low 2565.50
+
+    what SHAPE is it?
+    PASS  shape (mean depth of the closes)                    0.608   needs >= 0.41
+          reference: sharp spike V 0.05, late V 0.33,
+                     wide straight V 0.49, rounded U 0.51, saucer 0.76
+    PASS  low sits mid-cup, not at one end              0.68 across   needs 0.15-0.85
+    PASS  advance before the base                               80%   needs >= 25%
+    PASS  left rim vs right rim                      3480.00 / 3398.00   needs within -8% / +5%
+    PASS  buy point near the 52w high                2% under 3480.00   needs <= 10% under
+
+  STEP 3 - the handle
+    PASS  cup + handle length                               86 bars   needs >= 35
+    PASS  handle age                                         9 days   needs >= 5
+    PASS  handle not expired                                 9 days   needs <= 35
+    PASS  handle depth                                        10.0%   needs <= 12%
+    PASS  handle drifts DOWN, not up                    +0.184%/day   needs <= 0.0
+    PASS    ...and the rise beats its own noise             t +0.81   needs <= 1.0 is flat
+    PASS  volume dried up in the handle                   0.78x avg   needs <= 1.0x
+    PASS  not extended past the buy point            3374.00 vs 3398.00   needs <= 3567.90
+
+  STEP 4 - what the scanner concludes
+    LISTED as HANDLE FORMING: buy 3398.0, last 3374.0, stage 3
+    sell into strength 4077.6 to 4247.5 (+20 to +25% off the buy point - O'Neil's rule, not a measured move)
+    but if that arrives within 40 more session(s), hold the full 8 weeks and reassess
+    (the measured move, 4230.5, is shown for comparison only - it is not a rule from the book)
+
+==============================================================================
+SPLPETRO
+==============================================================================
+
+  STEP 1 - is it a candidate at all?
+    PASS  enough history                                   252 bars   needs >= 120
+    PASS  above the 200 DMA                          882.20 vs 693.71   needs price above
+    PASS  above the 50 DMA                           882.20 vs 745.00   needs price above
+    PASS  within 15% of the 20-week high                     -1.87%   needs >= -15%
+    PASS  liquid enough                                     426,032   needs >= 50,000
+    PASS  not a penny stock                                  882.20   needs >= 20
+    PASS  RS Rating (O'Neil's leadership line)                   81   needs >= 80
+
+  (6 zero-volume holiday bar(s) dropped - Yahoo emits a flat
+   bar for days the exchange was shut, and counting one as a session
+   shifts every pivot window and handle age by a day)
+
+  STEP 2 - is there a cup?   [494 daily bars]
+    No valid cup. The near misses, most common first:
+         4x  overhead supply: buy point 736.00 is 25% under the 52w high 979.00 (max 10%)
+         1x  cup too short (12 bars, min 30)
+         1x  cup too short (28 bars, min 30)
+         1x  rims uneven (left 847.00 vs right 736.00)
+         1x  rims uneven (left 805.00 vs right 736.00)
+         1x  rims uneven (left 655.00 vs right 736.00)
+
+==============================================================================
+ANDHRSUGAR
+==============================================================================
+
+  STEP 1 - is it a candidate at all?
+    PASS  enough history                                   252 bars   needs >= 120
+    PASS  above the 200 DMA                          95.20 vs 83.11   needs price above
+    PASS  above the 50 DMA                           95.20 vs 93.57   needs price above
+    PASS  within 15% of the 20-week high                    -10.93%   needs >= -15%
+    PASS  liquid enough                                     429,870   needs >= 50,000
+    PASS  not a penny stock                                   95.20   needs >= 20
+    FAIL  RS Rating (O'Neil's leadership line)                   77   needs >= 80
+
+  -> Filtered out BEFORE the pattern scan. Nothing above is about
+     the cup; the stock simply is not a leader by these rules today.
+
+==============================================================================
+MANINDS
+==============================================================================
+
+  STEP 1 - is it a candidate at all?
+    PASS  enough history                                   252 bars   needs >= 120
+    PASS  above the 200 DMA                          986.70 vs 512.54   needs price above
+    PASS  above the 50 DMA                           986.70 vs 676.06   needs price above
+    PASS  within 15% of the 20-week high                     -1.82%   needs >= -15%
+    PASS  liquid enough                                   1,973,840   needs >= 50,000
+    PASS  not a penny stock                                  986.70   needs >= 20
+    PASS  RS Rating (O'Neil's leadership line)                   99   needs >= 80
+
+  (6 zero-volume holiday bar(s) dropped - Yahoo emits a flat
+   bar for days the exchange was shut, and counting one as a session
+   shifts every pivot window and handle age by a day)
+
+  STEP 2 - is there a cup?   [495 daily bars]
+    No valid cup. The near misses, most common first:
+         2x  rims uneven (left 445.00 vs right 944.00)
+         1x  rims uneven (left 623.70 vs right 944.00)
+         1x  rims uneven (left 606.40 vs right 944.00)
+         1x  rims uneven (left 570.00 vs right 944.00)
+         1x  rims uneven (left 470.90 vs right 944.00)
+         1x  rims uneven (left 462.00 vs right 944.00)
+
+==============================================================================
+OPTIEMUS
+==============================================================================
+
+  STEP 1 - is it a candidate at all?
+    PASS  enough history                                   251 bars   needs >= 120
+    PASS  above the 200 DMA                          828.35 vs 471.69   needs price above
+    PASS  above the 50 DMA                           828.35 vs 590.43   needs price above
+    PASS  within 15% of the 20-week high                     -2.62%   needs >= -15%
+    PASS  liquid enough                                   1,175,272   needs >= 50,000
+    PASS  not a penny stock                                  828.35   needs >= 20
+    PASS  RS Rating (O'Neil's leadership line)                   98   needs >= 80
+
+  (5 zero-volume holiday bar(s) dropped - Yahoo emits a flat
+   bar for days the exchange was shut, and counting one as a session
+   shifts every pivot window and handle age by a day)
+
+  STEP 2 - is there a cup?   [494 daily bars]
+    No valid cup. The near misses, most common first:
+         2x  rims uneven (left 455.00 vs right 609.95)
+         2x  overhead supply: buy point 609.95 is 14% under the 52w high 713.00 (max 10%)
+         2x  rims uneven (left 455.00 vs right 661.00)
+         1x  cup too short (16 bars, min 30)
+         1x  rims uneven (left 468.00 vs right 609.95)
+         1x  rims uneven (left 438.20 vs right 609.95)
+
+==============================================================================
+SUBEXLTD
+==============================================================================
+
+  STEP 1 - is it a candidate at all?
+    PASS  enough history                                   252 bars   needs >= 120
+    PASS  above the 200 DMA                          22.08 vs 11.73   needs price above
+    PASS  above the 50 DMA                           22.08 vs 16.11   needs price above
+    PASS  within 15% of the 20-week high                     -3.16%   needs >= -15%
+    PASS  liquid enough                                  13,583,892   needs >= 50,000
+    PASS  not a penny stock                                   22.08   needs >= 20
+    PASS  RS Rating (O'Neil's leadership line)                   99   needs >= 80
+
+  (6 zero-volume holiday bar(s) dropped - Yahoo emits a flat
+   bar for days the exchange was shut, and counting one as a session
+   shifts every pivot window and handle age by a day)
+
+  STEP 2 - is there a cup?   [495 daily bars]
+    No valid cup. The near misses, most common first:
+         2x  rims uneven (left 12.39 vs right 21.85)
+         2x  rims uneven (left 12.39 vs right 19.39)
+         1x  cup too short (16 bars, min 30)
+         1x  rims uneven (left 13.97 vs right 21.85)
+         1x  rims uneven (left 11.25 vs right 21.85)
+         1x  rims uneven (left 11.45 vs right 21.85)
+
+==============================================================================
+MARINE
+==============================================================================
+
+  STEP 1 - is it a candidate at all?
+    PASS  enough history                                   252 bars   needs >= 120
+    PASS  above the 200 DMA                          425.80 vs 248.66   needs price above
+    PASS  above the 50 DMA                           425.80 vs 352.36   needs price above
+    PASS  within 15% of the 20-week high                     -5.38%   needs >= -15%
+    PASS  liquid enough                                   1,969,197   needs >= 50,000
+    PASS  not a penny stock                                  425.80   needs >= 20
+    PASS  RS Rating (O'Neil's leadership line)                   98   needs >= 80
+
+  (6 zero-volume holiday bar(s) dropped - Yahoo emits a flat
+   bar for days the exchange was shut, and counting one as a session
+   shifts every pivot window and handle age by a day)
+
+  STEP 2 - is there a cup?   [495 daily bars]
+    No valid cup. The near misses, most common first:
+         3x  rims uneven (left 198.00 vs right 450.00)
+         3x  rims uneven (left 198.00 vs right 395.00)
+         1x  cup too short (10 bars, min 30)
+         1x  rims uneven (left 297.90 vs right 450.00)
+         1x  rims uneven (left 282.48 vs right 450.00)
+         1x  rims uneven (left 249.25 vs right 450.00)
+
+==============================================================================
+SANSERA
+==============================================================================
+
+  STEP 1 - is it a candidate at all?
+    PASS  enough history                                   252 bars   needs >= 120
+    PASS  above the 200 DMA                          4621.40 vs 2696.43   needs price above
+    PASS  above the 50 DMA                           4621.40 vs 3772.98   needs price above
+    PASS  within 15% of the 20-week high                     -2.57%   needs >= -15%
+    PASS  liquid enough                                     245,766   needs >= 50,000
+    PASS  not a penny stock                                 4621.40   needs >= 20
+    PASS  RS Rating (O'Neil's leadership line)                   98   needs >= 80
+
+  (6 zero-volume holiday bar(s) dropped - Yahoo emits a flat
+   bar for days the exchange was shut, and counting one as a session
+   shifts every pivot window and handle age by a day)
+
+  STEP 2 - is there a cup?   [495 daily bars]
+    No valid cup. The near misses, most common first:
+         1x  cup too short (21 bars, min 30)
+         1x  rims uneven (left 3271.00 vs right 4040.40)
+         1x  rims uneven (left 2992.20 vs right 4040.40)
+         1x  rims uneven (left 2672.50 vs right 4040.40)
+         1x  rims uneven (left 2228.40 vs right 4040.40)
+         1x  rims uneven (left 2396.00 vs right 4040.40)
+
