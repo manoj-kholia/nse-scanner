@@ -1,5 +1,5 @@
-EXPLAIN 2026-09-24 08:57 IST
-commit  811bdd961e9365fe3946edb083cab3655c3aa7c0
+EXPLAIN 2026-09-24 09:06 IST
+commit  b770f9e2fe6f5f12acb79aacf12adce15024e1ea
 symbols NPST SOMANYCERA MCX SPLPETRO ANDHRSUGAR MANINDS OPTIEMUS SUBEXLTD MARINE SANSERA
 
 --- the rules this run enforced ---
@@ -17,7 +17,7 @@ symbols NPST SOMANYCERA MCX SPLPETRO ANDHRSUGAR MANINDS OPTIEMUS SUBEXLTD MARINE
   hold_sessions      40
   max_ext            0.05
   max_loss           0.08
-  overhead           0.1
+  overhead           0.15
   overhead_look      252
   pierce             0.02
   piv                5
@@ -31,7 +31,7 @@ symbols NPST SOMANYCERA MCX SPLPETRO ANDHRSUGAR MANINDS OPTIEMUS SUBEXLTD MARINE
   vol_len            50
   vol_mult           1.4
 
-2026-09-24 03:27  explaining NPST, SOMANYCERA, MCX, SPLPETRO, ANDHRSUGAR, MANINDS, OPTIEMUS, SUBEXLTD, MARINE, SANSERA
+2026-09-24 03:36  explaining NPST, SOMANYCERA, MCX, SPLPETRO, ANDHRSUGAR, MANINDS, OPTIEMUS, SUBEXLTD, MARINE, SANSERA
 
 ==============================================================================
 NPST
@@ -52,9 +52,9 @@ NPST
 
   STEP 2 - is there a cup?   [494 daily bars]
     No valid cup. The near misses, most common first:
-         5x  overhead supply: buy point 1775.00 is 20% under the 52w high 2208.60 (max 10%)
-         5x  overhead supply: buy point 1764.80 is 26% under the 52w high 2388.30 (max 10%)
-         3x  overhead supply: buy point 1686.90 is 29% under the 52w high 2388.30 (max 10%)
+         5x  overhead supply: buy point 1775.00 is 20% under the 52w high 2208.60 (max 15%)
+         5x  overhead supply: buy point 1764.80 is 26% under the 52w high 2388.30 (max 15%)
+         3x  overhead supply: buy point 1686.90 is 29% under the 52w high 2388.30 (max 15%)
          2x  cup too short (28 bars, min 30)
          1x  cup too short (7 bars, min 30)
          1x  cup too short (16 bars, min 30)
@@ -86,7 +86,7 @@ SOMANYCERA
     PASS  low sits mid-cup, not at one end              0.28 across   needs 0.15-0.85
     PASS  advance before the base                               66%   needs >= 25%
     PASS  left rim vs right rim                      550.65 / 576.80   needs within -8% / +5%
-    PASS  buy point near the 52w high                0% under 576.80   needs <= 10% under
+    PASS  buy point near the 52w high                0% under 576.80   needs <= 15% under
 
   STEP 3 - the handle
     (broke out 1 session(s) ago at bar 492; the handle
@@ -95,13 +95,13 @@ SOMANYCERA
     PASS  handle age                                        13 days   needs >= 5
     PASS  handle not expired                                13 days   needs <= 35
     PASS  handle depth                                         8.2%   needs <= 12%
-    PASS  handle drifts DOWN, not up                    +0.039%/day   needs <= 0.0
-    PASS    ...and the rise beats its own noise             t +0.33   needs <= 1.0 is flat
+    PASS  handle does not wedge upward               +0.039%/day but t +0.33, flat within noise   needs drift <= 0.0%/day, or t <= 1.0 (flat within noise)
     PASS  volume dried up in the handle                   0.48x avg   needs <= 1.0x
     PASS  not extended past the buy point            594.75 vs 576.80   needs <= 605.64
 
   STEP 4 - what the scanner concludes
     LISTED as BREAKOUT: buy 576.8, last 594.75, stage 1
+    STOP 542.29  (risk 8.0% from the breakout price 589.45)
     sell into strength 692.16 to 721.0 (+20 to +25% off the buy point - O'Neil's rule, not a measured move)
     but if that arrives within 39 more session(s), hold the full 8 weeks and reassess
     (the measured move, 677.5, is shown for comparison only - it is not a rule from the book)
@@ -133,20 +133,20 @@ MCX
     PASS  low sits mid-cup, not at one end              0.68 across   needs 0.15-0.85
     PASS  advance before the base                               80%   needs >= 25%
     PASS  left rim vs right rim                      3480.00 / 3398.00   needs within -8% / +5%
-    PASS  buy point near the 52w high                2% under 3480.00   needs <= 10% under
+    PASS  buy point near the 52w high                2% under 3480.00   needs <= 15% under
 
   STEP 3 - the handle
     PASS  cup + handle length                               86 bars   needs >= 35
     PASS  handle age                                         9 days   needs >= 5
     PASS  handle not expired                                 9 days   needs <= 35
     PASS  handle depth                                        10.0%   needs <= 12%
-    PASS  handle drifts DOWN, not up                    +0.184%/day   needs <= 0.0
-    PASS    ...and the rise beats its own noise             t +0.81   needs <= 1.0 is flat
+    PASS  handle does not wedge upward               +0.184%/day but t +0.81, flat within noise   needs drift <= 0.0%/day, or t <= 1.0 (flat within noise)
     PASS  volume dried up in the handle                   0.78x avg   needs <= 1.0x
     PASS  not extended past the buy point            3374.00 vs 3398.00   needs <= 3567.90
 
   STEP 4 - what the scanner concludes
     LISTED as HANDLE FORMING: buy 3398.0, last 3374.0, stage 3
+    STOP 3126.16  (risk 8.0% from the buy point)
     sell into strength 4077.6 to 4247.5 (+20 to +25% off the buy point - O'Neil's rule, not a measured move)
     but if that arrives within 40 more session(s), hold the full 8 weeks and reassess
     (the measured move, 4230.5, is shown for comparison only - it is not a rule from the book)
@@ -170,7 +170,7 @@ SPLPETRO
 
   STEP 2 - is there a cup?   [494 daily bars]
     No valid cup. The near misses, most common first:
-         4x  overhead supply: buy point 736.00 is 25% under the 52w high 979.00 (max 10%)
+         4x  overhead supply: buy point 736.00 is 25% under the 52w high 979.00 (max 15%)
          1x  cup too short (12 bars, min 30)
          1x  cup too short (28 bars, min 30)
          1x  rims uneven (left 847.00 vs right 736.00)
@@ -238,8 +238,8 @@ OPTIEMUS
 
   STEP 2 - is there a cup?   [494 daily bars]
     No valid cup. The near misses, most common first:
+         3x  price pierced above the rim mid-cup
          2x  rims uneven (left 455.00 vs right 609.95)
-         2x  overhead supply: buy point 609.95 is 14% under the 52w high 713.00 (max 10%)
          2x  rims uneven (left 455.00 vs right 661.00)
          1x  cup too short (16 bars, min 30)
          1x  rims uneven (left 468.00 vs right 609.95)
