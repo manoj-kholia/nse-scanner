@@ -203,15 +203,24 @@ def explain(sym, df, live, min_rs=80):
     line(h_depth <= fp.P["handle_depth"], "handle depth",
          f"{h_depth*100:.1f}%", f"<= {fp.P['handle_depth']*100:.0f}%")
     if slope is not None:
-        # The gate only bites when the rise also beats its own standard error,
-        # so a handle that is flat within noise is not called a wedge.
+        # ONE line, because it is ONE gate. It used to print two, and the first
+        # of them read "handle drifts DOWN, not up   +0.184%/day   needs <= 0.0
+        # PASS" - a pass stated against a limit the number plainly breaks. The
+        # rule is the conjunction: a handle is only wedging if it rises AND the
+        # rise beats its own standard error. Printing half a conjunction as if
+        # it were the whole test makes a correct verdict look like a bug.
         wedging = slope > fp.P["handle_slope"] and (
             slope_t is None or slope_t > fp.P["handle_slope_t"])
-        line(not wedging, "handle drifts DOWN, not up",
-             f"{slope:+.3f}%/day", f"<= {fp.P['handle_slope']:.1f}")
-        if slope_t is not None:
-            line(not wedging, "  ...and the rise beats its own noise",
-                 f"t {slope_t:+.2f}", f"<= {fp.P['handle_slope_t']:.1f} is flat")
+        if slope <= fp.P["handle_slope"]:
+            verdict = f"{slope:+.3f}%/day, drifting down"
+        elif not wedging:
+            verdict = (f"{slope:+.3f}%/day but t {slope_t:+.2f}, flat within noise"
+                       if slope_t is not None else f"{slope:+.3f}%/day, too short to judge")
+        else:
+            verdict = f"{slope:+.3f}%/day, t {slope_t:+.2f}, wedging up"
+        line(not wedging, "handle does not wedge upward", verdict,
+             f"drift <= {fp.P['handle_slope']:.1f}%/day, or t <= "
+             f"{fp.P['handle_slope_t']:.1f} (flat within noise)")
     if dry is not None:
         line(dry <= fp.P["handle_vol"], "volume dried up in the handle",
              f"{dry:.2f}x avg", f"<= {fp.P['handle_vol']:.1f}x")
@@ -224,6 +233,11 @@ def explain(sym, df, live, min_rs=80):
         print(f"    LISTED as {res.get('Stage', 'a signal')}: "
               f"buy {res['Buy_Point']}, last {res['Last_Price']}, "
               f"stage {res.get('Base_Stage')}")
+        # The stop is the one number O'Neil calls unbreakable, and this report
+        # was not printing it at all - the single most important figure was
+        # missing from the page that exists to explain the decision.
+        print(f"    STOP {res.get('Stop')}  (risk {res.get('Risk_pct')}% from "
+              f"{'the breakout price ' + str(res.get('Breakout_Price')) if res.get('Breakout_Price') else 'the buy point'})")
         print(f"    sell into strength {res.get('Target')} to {res.get('Target_Max')} "
               f"(+{fp.P['profit_take']*100:.0f} to +{fp.P['profit_take_max']*100:.0f}% "
               f"off the buy point - O'Neil's rule, not a measured move)")

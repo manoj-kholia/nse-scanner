@@ -70,12 +70,30 @@ P = dict(
     prior_look=120,
     # OVERHEAD SUPPLY. O'Neil: "they will never make the fatal mistake of
     # buying a stock that has a large recent amount of overhead supply" - the
-    # people who bought at a higher price and are waiting to get out even. He
-    # allows a pivot 5-10% under the stock's former high; below that you are
-    # buying into a wall of sellers. The cup's own rim test cannot catch this,
-    # because it only compares the two rims with each other - a cup can be
-    # perfectly formed 30% below a peak the stock made eight months ago.
-    overhead=0.10,       # buy point may sit at most this far under the 52w high
+    # people who bought at a higher price and are waiting to get out even. The
+    # cup's own rim test cannot catch this, because it only compares the two
+    # rims with each other: a cup can be perfectly formed 30% below a peak the
+    # stock made eight months ago.
+    #
+    # 15% IS A CONVENTION, NOT A QUOTE. The book gives no figure for the
+    # distance from the 52-week high; 15% is the standard CANSLIM screen. His
+    # own "5% to 10% below a stock's former high point" is about the pivot
+    # versus the HIGH OF THIS BASE, which rim_down already enforces.
+    #
+    # It was 10% for one morning, which was wrong twice over:
+    #   * rim_down lets the right rim sit 8% under the left rim, and the left
+    #     rim is itself part of the 52-week window. So a textbook cup already
+    #     spends 8 of a 10-point budget before any older peak is considered -
+    #     the two rules were fighting each other. MCX measured "2% under the
+    #     52w high" where that high WAS its own left rim.
+    #   * it rejected NPST, a live signal, at 20% under - which is a genuine
+    #     call - but it was one bad day away from rejecting ordinary bases.
+    #
+    # KNOWN EXCEPTION, not handled: O'Neil explicitly allows a first base off a
+    # major bear-market low, where "some patterns that have decreased 50% to
+    # 60% or more can succeed". This gate rejects those. Set overhead=0 to scan
+    # for them after a bear market.
+    overhead=0.15,       # buy point may sit at most this far under the 52w high
     overhead_look=252,   # ...measured over the 252 bars ending at the right rim
     handle_min=5,        # 1 week minimum
     handle_max=35,

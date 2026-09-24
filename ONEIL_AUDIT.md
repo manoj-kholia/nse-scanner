@@ -39,7 +39,7 @@ on NSE.
 | Buy at or near new highs emerging from a base | ch.3 | ✅ the buy point is the right rim of the cup |
 | Base-building 7–8 weeks up to 15 months | ch.3; "reliable base structures must have a minimum of six to eight weeks" (ch.15) | `base_min = 35` bars (7 wks) for cup + handle ✅; `cup_max = 250` bars (50 wks) is **tighter** than his 65 weeks ⚠️ |
 | Never buy more than 5–10% past the exact buy point | ch.3, ch.5, ch.15 | `max_ext = 0.05` ✅ (stricter end of his range) |
-| **Overhead supply** — never buy under a wall of trapped sellers; pivots sit 5–10% below the former high | ch.15, "What Is Overhead Supply?" | ✅ **FIXED** — `overhead = 0.10` over `overhead_look = 252` bars in `find_patterns.find_cup()`, mirrored in `cup_and_handle_v3.pine` and `pine_parity.py`. The rim test could not catch this: it only compares the two rims with each other, so a textbook cup could sit 30% below a peak the stock made eight months ago. |
+| **Overhead supply** — never buy under a wall of trapped sellers | ch.15, "What Is Overhead Supply?" | ✅ **FIXED** — `overhead = 0.15` over `overhead_look = 252` bars in `find_patterns.find_cup()`, mirrored in `cup_and_handle_v3.pine` and `pine_parity.py`. The rim test could not catch this: it only compares the two rims with each other, so a textbook cup could sit 30% below a peak the stock made eight months ago. **15% is the conventional CANSLIM screen, not a figure from the book** — his "5% to 10% below a stock's former high point" is about the pivot versus the high of *this* base, which `rim_down` already enforces. |
 | A major new product / management / industry change (>95% of winners) | ch.3 | ❌ not automatable from price data; no attempt made |
 
 ## S — Supply and demand
@@ -170,9 +170,32 @@ Indian small caps, and a group with fewer than 4 mapped members is named but
 | | Before | After |
 |---|---|---|
 | Target | `buy + (buy − cup_low)`, drifting +13.6% to +54% with cup depth | `buy × 1.20`, with `Target_Max` at 1.25 and the 8-week hold exception surfaced |
-| Buy point vs the 52-week high | unchecked | must sit within 10% of it (`overhead`) |
+| Buy point vs the 52-week high | unchecked | must sit within 15% of it (`overhead`) |
 | Industry | not in the pipeline | group rank 1–99 on every signal, top 30% flagged |
 
 `pine_parity.py` reports **0 disagreements** over 5,208 generated series after
 these changes, with the overhead-supply branch firing on 154 of 640 sampled
 series — so the new gate is genuinely exercised, not merely present.
+
+## What the 10-stock audit found afterwards
+
+Run against real Yahoo data on 24 Sep 2026 (`explain.yml`, symbols NPST
+SOMANYCERA MCX SPLPETRO ANDHRSUGAR MANINDS OPTIEMUS SUBEXLTD MARINE SANSERA):
+
+1. **The overhead gate was set too tight, by me, that morning.** `rim_down`
+   lets the right rim sit 8% under the left rim, and the left rim is itself
+   inside the 52-week window — so an ordinary cup already reads "8% under the
+   52-week high" before any older peak is considered. MCX measured 2% under a
+   "52-week high" that *was its own left rim*. At a 10% budget the two rules
+   were fighting each other. Raised to 15%.
+2. **The handle-drift line in `explain_pattern.py` contradicted itself**,
+   printing `handle drifts DOWN, not up  +0.184%/day  needs <= 0.0  PASS`. The
+   rule is a conjunction — a handle wedges only if it rises *and* the rise
+   beats its own standard error — and printing half a conjunction as though it
+   were the whole test makes a correct verdict look like a bug. Now one line.
+3. **The report never printed the stop.** The one number O'Neil calls
+   unbreakable was missing from the page whose job is to explain the decision.
+
+Known live consequence: NPST's buy point (1775.00) sits 20% under its 52-week
+high of 2208.60, so it is rejected even at 15% and drops off the list. That is
+the gate working as intended, not a defect.
