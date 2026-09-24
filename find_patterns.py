@@ -132,6 +132,72 @@ def pivot_highs(high, piv):
     return out
 
 
+def cup_between(high, low, close, li, ri, p=P):
+    """Is the stretch from pivot `li` to pivot `ri` a valid cup?
+
+    Returns (cup, None) or (None, reason). Every gate from the rims onward
+    lives here so that the live scan and the historical scan cannot drift
+    apart - the whole point of marking past setups on a chart is that they were
+    judged by exactly the rules running today.
+
+    The two LENGTH tests stay in the caller because they are loop control, not
+    gates: "too long" breaks out of the search, "too short" skips to the next
+    pair, and that difference is load-bearing for the Pine transliteration.
+    """
+    lp, rp = high[li], high[ri]
+    if not (lp * (1 - p["rim_down"]) <= rp <= lp * (1 + p["rim_up"])):
+        return None, f"rims uneven (left {lp:.2f} vs right {rp:.2f})"
+
+    # Overhead supply: the buy point has to be near the stock's own
+    # 52-week high, not merely near the other rim.
+    # The window must be FULL before this can judge anything, because
+    # Pine's ta.highest returns na until it has its full length and a
+    # truncated window here would reject cups the chart accepts.
+    if p["overhead"] > 0 and ri + 1 >= p["overhead_look"]:
+        hi52 = float(high[ri + 1 - p["overhead_look"]:ri + 1].max())
+        if hi52 > 0 and rp < hi52 * (1 - p["overhead"]):
+            return None, (f"overhead supply: buy point {rp:.2f} is "
+                          f"{(1 - rp / hi52) * 100:.0f}% under the 52w high "
+                          f"{hi52:.2f} (max {p['overhead'] * 100:.0f}%)")
+
+    inside = slice(li + 1, ri)
+    if inside.stop <= inside.start:
+        return None, None
+    rim_hi = max(lp, rp)
+    cup_low = low[inside].min()
+    lo_bar = li + 1 + int(np.argmin(low[inside]))
+    if high[inside].max() > rim_hi * (1 + p["pierce"]):
+        return None, "price pierced above the rim mid-cup"
+
+    depth = (rim_hi - cup_low) / rim_hi
+    if not (p["depth_min"] <= depth <= p["depth_max"]):
+        return None, (f"cup depth {depth*100:.1f}% outside "
+                      f"{p['depth_min']*100:.0f}-{p['depth_max']*100:.0f}%")
+
+    length = ri - li
+    pos = (lo_bar - li) / length                   # where the low sits in the cup
+    if not (0.15 <= pos <= 0.85):
+        return None, f"cup low sits at {pos:.2f} of the way across (needs 0.15-0.85)"
+
+    span = rim_hi - cup_low
+    if span <= 0:
+        return None, None
+    shape = float(np.mean((rim_hi - close[inside]) / span))
+    if shape < p["round_min"]:
+        return None, f"V-shaped: shape {shape:.3f} below {p['round_min']:.2f}"
+
+    if p["prior_pct"] > 0:
+        start = max(0, li - p["prior_look"])
+        if start >= li:
+            return None, None
+        prior_low = low[start:li].min()
+        if prior_low <= 0 or (lp - prior_low) / prior_low < p["prior_pct"]:
+            return None, "no 25% advance before the base"
+
+    return dict(left=li, right=ri, buy=float(rp), cup_low=float(cup_low),
+                depth=float(depth), length=int(length)), None
+
+
 def find_cup(df, p=P, why=None):
     """Newest valid cup whose right rim is recent enough to still have a live handle.
 
@@ -168,63 +234,12 @@ def find_cup(df, p=P, why=None):
                 no(f"cup too short ({length} bars, min {p['cup_min']})")
                 continue
 
-            lp, rp = high[li], high[ri]
-            if not (lp * (1 - p["rim_down"]) <= rp <= lp * (1 + p["rim_up"])):
-                no(f"rims uneven (left {lp:.2f} vs right {rp:.2f})")
+            cup, reason = cup_between(high, low, close, li, ri, p)
+            if cup is None:
+                if reason:
+                    no(reason)
                 continue
-
-            # Overhead supply: the buy point has to be near the stock's own
-            # 52-week high, not merely near the other rim.
-            # The window must be FULL before this can judge anything, because
-            # Pine's ta.highest returns na until it has its full length and a
-            # truncated window here would reject cups the chart accepts.
-            if p["overhead"] > 0 and ri + 1 >= p["overhead_look"]:
-                hi52 = float(high[ri + 1 - p["overhead_look"]:ri + 1].max())
-                if hi52 > 0 and rp < hi52 * (1 - p["overhead"]):
-                    no(f"overhead supply: buy point {rp:.2f} is "
-                       f"{(1 - rp / hi52) * 100:.0f}% under the 52w high {hi52:.2f} "
-                       f"(max {p['overhead'] * 100:.0f}%)")
-                    continue
-
-            inside = slice(li + 1, ri)
-            if inside.stop <= inside.start:
-                continue
-            rim_hi = max(lp, rp)
-            cup_low = low[inside].min()
-            lo_bar = li + 1 + int(np.argmin(low[inside]))
-            if high[inside].max() > rim_hi * (1 + p["pierce"]):
-                no("price pierced above the rim mid-cup")
-                continue
-
-            depth = (rim_hi - cup_low) / rim_hi
-            if not (p["depth_min"] <= depth <= p["depth_max"]):
-                no(f"cup depth {depth*100:.1f}% outside {p['depth_min']*100:.0f}-{p['depth_max']*100:.0f}%")
-                continue
-
-            pos = (lo_bar - li) / length               # where the low sits in the cup
-            if not (0.15 <= pos <= 0.85):
-                no(f"cup low sits at {pos:.2f} of the way across (needs 0.15-0.85)")
-                continue
-
-            span = rim_hi - cup_low
-            if span <= 0:
-                continue
-            shape = float(np.mean((rim_hi - close[inside]) / span))
-            if shape < p["round_min"]:
-                no(f"V-shaped: shape {shape:.3f} below {p['round_min']:.2f}")
-                continue
-
-            if p["prior_pct"] > 0:
-                start = max(0, li - p["prior_look"])
-                if start >= li:
-                    continue
-                prior_low = low[start:li].min()
-                if prior_low <= 0 or (lp - prior_low) / prior_low < p["prior_pct"]:
-                    no("no 25% advance before the base")
-                    continue
-
-            return dict(left=li, right=ri, buy=float(rp), cup_low=float(cup_low),
-                        depth=float(depth), length=int(length))
+            return cup
     return None
 
 

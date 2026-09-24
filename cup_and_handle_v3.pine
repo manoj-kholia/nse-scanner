@@ -37,7 +37,7 @@
 //  Educational tool. Not investment advice.
 // ============================================================================
 indicator("Cup and Handle - O'Neil (matches the NSE scanner)", "C&H v3",
-     overlay = true, max_bars_back = 1500, max_lines_count = 80, max_labels_count = 20)
+     overlay = true, max_bars_back = 1500, max_lines_count = 500, max_labels_count = 500)
 
 // --- rules. Defaults are find_patterns.py's P dict, value for value. --------
 gD = "0. Data"
@@ -85,6 +85,11 @@ gV = "6. Display"
 showCup   = input.bool(true, "Draw the cup outline", group=gV)
 showTable = input.bool(true, "Show the gate-by-gate verdict", group=gV)
 tblPos    = input.string("top right", "Verdict position", options=["top right", "bottom right", "bottom left"], group=gV)
+
+gPast = "7. Past setups"
+showPast = input.bool(true, "Mark cup-and-handles that already played out", group=gPast, tooltip="The live verdict only ever describes ONE base - the newest, and only while its handle is still inside the window. Everything before that is invisible, which is exactly what O'Neil tells you to study (ch.14, models of past winners; sell rule 26, 'plot on charts your past buy-and-sell points'). This walks back through the history, finds every base the same rules would have armed at the time, and marks what became of it: the buy point, the 7-8% stop, the +20% target, and which one the price reached first.")
+pastMax  = input.int(10, "How many to keep on the chart", minval=1, maxval=30, group=gPast, tooltip="Newest first. Each one costs 3 lines and a label, and TradingView caps both.")
+pastFwd  = input.int(250, "Give each trade this many bars to resolve", minval=20, maxval=500, group=gPast)
 
 // ----------------------------------------------------------------------------
 avgVol = ta.sma(volume, volLen)
@@ -518,6 +523,248 @@ if barstate.islast
                 r := vrow(verdict, r, "8-week rule",  "hold 40 sessions if +" + str.tostring(takePct * 100, "#") + "% comes sooner", "", true)
                 r := vrow(verdict, r, "measured move", str.tostring(mmove, format.mintick) + "  (+" + str.tostring((mmove / buy - 1) * 100, "#.#") + "%)", "not an O'Neil rule", true)
             r := vrow(verdict, r, "RS Rating",        "not available", "dashboard needs 80+", true)
+
+// ============================================================================
+//  PAST SETUPS - what these same rules said before today
+// ----------------------------------------------------------------------------
+//  The block above only ever describes ONE base: the newest, and only while
+//  its handle is still inside the window. It walks pivots newest-first and
+//  BREAKS at the first rim older than handleMax, so a textbook cup that formed
+//  in March, broke out and ran 30% leaves no mark on the chart at all.
+//
+//  That is the thing O'Neil spends two chapters on - ch.14 is models of past
+//  winners, and sell rule 26 is "do your own post-analysis by plotting on
+//  charts your past buy-and-sell points."
+//
+//  This walks back through the history and marks each base the same rules
+//  would have armed AT THE TIME, with its buy point, its 7-8% stop, its +20%
+//  target, and which of the two the price reached first.
+//
+//  Everything is causal. A rim is only usable once pivLen bars have passed, no
+//  gate reads a bar later than the one it judges, and the forward walk starts
+//  at the breakout. It runs on the last bar, where history lookups are known
+//  to work - a function that history-references its argument would build its
+//  own series only on the bars it runs, which is the bug that made every
+//  lookup in this script return na once before.
+// ============================================================================
+if showPast and barstate.islast
+    int   lastB = bar_index - (dropLive and unfinished ? 1 : 0)
+    int   histF = math.max(0, lastB - histBars + 1)
+    array<int>   pRim  = array.new<int>()
+    array<int>   pLeft = array.new<int>()
+    array<float> pBuy  = array.new<float>()
+    array<float> pLo   = array.new<float>()
+
+    int np2 = array.size(pivBar)
+    if np2 >= 2
+        for a = np2 - 1 to 0
+            if array.size(pRim) >= pastMax
+                break
+            int ri2 = array.get(pivBar, a)
+            if ri2 > lastB or ri2 < histF
+                continue
+            // the live base is already drawn above; do not draw it twice
+            if lastB - ri2 <= handleMax
+                continue
+            if a < 1
+                continue
+            float rp2 = array.get(pivPrice, a)
+            for b = a - 1 to 0
+                int li2 = array.get(pivBar, b)
+                if li2 < histF
+                    break
+                int len2 = ri2 - li2
+                if len2 > cupMax
+                    break
+                if len2 < cupMin
+                    continue
+                float lp2 = array.get(pivPrice, b)
+                if not (rp2 <= lp2 * (1 + rimUp) and rp2 >= lp2 * (1 - rimDown))
+                    continue
+                float h52 = overhead > 0 ? hi52All[bar_index - (ri2)] : na
+                if not na(h52) and h52 > 0 and rp2 < h52 * (1 - overhead)
+                    continue
+                float rimH2 = math.max(lp2, rp2)
+                float lo2   = 1e12
+                int   lb2   = ri2
+                float hiIn2 = 0.0
+                for i = li2 + 1 to ri2 - 1
+                    float lv2 = low[bar_index - (i)]
+                    float hv2 = high[bar_index - (i)]
+                    if lv2 < lo2
+                        lo2 := lv2
+                        lb2 := i
+                    hiIn2 := math.max(hiIn2, hv2)
+                if hiIn2 > rimH2 * (1 + pierceTol)
+                    continue
+                float dep2 = (rimH2 - lo2) / rimH2
+                if dep2 < minDepth or dep2 > maxDepth
+                    continue
+                float pp2 = (lb2 - li2) * 1.0 / len2
+                if pp2 < 0.15 or pp2 > 0.85
+                    continue
+                float span2 = rimH2 - lo2
+                if span2 <= 0
+                    continue
+                float acc2 = 0.0
+                for i = li2 + 1 to ri2 - 1
+                    acc2 += (rimH2 - close[bar_index - (i)]) / span2
+                if acc2 / (ri2 - li2 - 1) < minRound
+                    continue
+                bool priorOk = true
+                if priorPct > 0
+                    int ps2 = math.max(0, li2 - priorLook)
+                    if ps2 >= li2
+                        priorOk := false
+                    else
+                        float pLo2 = 1e12
+                        for i = ps2 to li2 - 1
+                            pLo2 := math.min(pLo2, low[bar_index - (i)])
+                        if pLo2 <= 0 or (lp2 - pLo2) / pLo2 < priorPct
+                            priorOk := false
+                if not priorOk
+                    continue
+                array.push(pRim,  ri2)
+                array.push(pLeft, li2)
+                array.push(pBuy,  rp2)
+                array.push(pLo,   lo2)
+                break
+
+    // --- simulate them oldest-first, so one open position blocks the next ---
+    int openTill = -1
+    int cnt2 = array.size(pRim)
+    if cnt2 > 0
+        for q = cnt2 - 1 to 0
+            int   ri3  = array.get(pRim,  q)
+            int   li3  = array.get(pLeft, q)
+            float buy3 = array.get(pBuy,  q)
+            float clo3 = array.get(pLo,   q)
+            float mid3 = clo3 + (buy3 - clo3) / 2
+            int   len3 = ri3 - li3
+
+            int    bo3  = na
+            string why3 = "expired"
+            float  hLo3 = 1e12
+            int    jEnd = math.min(lastB, ri3 + handleMax)
+            for j = ri3 + 1 to jEnd
+                hLo3 := math.min(hLo3, low[bar_index - (j)])
+                if hLo3 < mid3 or (buy3 - hLo3) / buy3 > handleDepth
+                    why3 := "broke down"
+                    break
+                if j - ri3 < handleMin
+                    continue
+                if len3 + (j - ri3) < baseMin
+                    continue
+                float c3 = close[bar_index - (j)]
+                if c3 <= buy3 or c3 > buy3 * (1 + maxExt)
+                    continue
+                float av3 = avgVol[bar_index - (j)]
+                if not na(av3) and volume[bar_index - (j)] < volMult * av3
+                    continue
+                float s3 = sma200[bar_index - (j)]
+                if not na(s3) and c3 <= s3
+                    continue
+                // the handle-quality gates, measured up to but not through the
+                // breakout bar - exactly as evaluate() does it
+                int   m3  = j - (ri3 + 1)
+                bool  ok3 = true
+                if m3 >= 3
+                    float sx3 = 0.0
+                    float sy3 = 0.0
+                    float sxy3 = 0.0
+                    float sxx3 = 0.0
+                    float syy3 = 0.0
+                    float sv3 = 0.0
+                    for i = ri3 + 1 to j - 1
+                        float xx = i - (ri3 + 1)
+                        float yy = close[bar_index - (i)]
+                        sx3  += xx
+                        sy3  += yy
+                        sxy3 += xx * yy
+                        sxx3 += xx * xx
+                        syy3 += yy * yy
+                        sv3  += volume[bar_index - (i)]
+                    float den3 = m3 * sxx3 - sx3 * sx3
+                    if den3 != 0 and buy3 != 0
+                        float raw3 = (m3 * sxy3 - sx3 * sy3) / den3
+                        float slp3 = math.round(raw3 / buy3 * 100, 3)
+                        float cxx3 = sxx3 - sx3 * sx3 / m3
+                        float cxy3 = sxy3 - sx3 * sy3 / m3
+                        float cyy3 = syy3 - sy3 * sy3 / m3
+                        float sse3 = cxx3 != 0 ? math.max(cyy3 - (cxy3 / cxx3) * cxy3, 0.0) : 0.0
+                        float tst3 = na
+                        if m3 > 2 and cxx3 > 0 and sse3 > 0
+                            float se3 = math.sqrt(sse3 / ((m3 - 2) * cxx3))
+                            tst3 := se3 != 0 ? math.round((cxy3 / cxx3) / se3, 2) : na
+                        else if m3 > 2 and sse3 == 0
+                            tst3 := 0.0
+                        if slp3 > handleSlope and (na(tst3) or tst3 > handleSlopeT)
+                            why3 := "wedged up"
+                            ok3  := false
+                    float ref3 = avgVol[bar_index - (j - 1)]
+                    if ok3 and not na(ref3) and ref3 > 0
+                        if math.round((sv3 / m3) / ref3, 2) > handleVol
+                            ok3 := false      // may still dry up on a later bar
+                if not ok3
+                    if why3 == "wedged up"
+                        break
+                    continue
+                bo3  := j
+                why3 := "breakout"
+                break
+
+            // --- draw it ------------------------------------------------
+            //  three outcomes, three different things worth seeing:
+            //  never triggered, triggered while another position was open, or
+            //  a real trade with an entry, a stop and a target.
+            if na(bo3)
+                array.push(lvlLines, line.new(ri3, buy3, math.min(lastB, ri3 + handleMax), buy3, color=color.new(color.gray, 65), width=1, style=line.style_dotted))
+                array.push(tags, label.new(math.min(lastB, ri3 + handleMax), buy3, why3 == "broke down" ? "handle broke down" : why3 == "wedged up" ? "handle wedged up" : "no breakout", style=label.style_label_left, color=color.new(color.gray, 55), textcolor=color.white, size=size.tiny))
+            else if bo3 <= openTill
+                array.push(tags, label.new(bo3, buy3, "skipped, position open", style=label.style_label_left, color=color.new(color.gray, 55), textcolor=color.white, size=size.tiny))
+            else
+                float ent3 = close[bar_index - (bo3)]
+                // Pine infers loop direction from the bounds. handleMin has a
+                // minval of 1, so bo3 can sit one bar after the rim and
+                // `for i = ri3 + 1 to bo3 - 1` would count DOWNWARD, reading
+                // bars from before the base. Same trap as the pivot loop.
+                float hl3 = low[bar_index - (ri3 + 1)]
+                if bo3 > ri3 + 2
+                    for i = ri3 + 2 to bo3 - 1
+                        hl3 := math.min(hl3, low[bar_index - (i)])
+                float stp3 = math.max(hl3, ent3 * (1 - maxLoss))
+                float tgt3 = buy3 * (1 + takePct)
+                int    res3 = na
+                string out3 = "still open"
+                int    kEnd = math.min(lastB, bo3 + pastFwd)
+                for k = bo3 + 1 to kEnd
+                    bool hitS = low[bar_index - (k)] <= stp3
+                    bool hitT = high[bar_index - (k)] >= tgt3
+                    if hitS and hitT
+                        // one daily bar, both levels. The tape knows which came
+                        // first; a daily bar does not. Counting it as the target
+                        // is how a backtest flatters itself, so it counts as the
+                        // stop and says so.
+                        res3 := k
+                        out3 := "stop and target same day"
+                        break
+                    if hitS
+                        res3 := k
+                        out3 := "stopped " + str.tostring((stp3 / ent3 - 1) * 100, "#.#") + "% in " + str.tostring(k - bo3) + "d"
+                        break
+                    if hitT
+                        res3 := k
+                        out3 := "+" + str.tostring(takePct * 100, "#") + "% in " + str.tostring(k - bo3) + "d"
+                        break
+                int   x3  = na(res3) ? kEnd : res3
+                bool  bad = out3 != "still open" and str.contains(out3, "+") == false
+                color oc3 = bad ? color.new(color.red, 25) : out3 == "still open" ? color.new(color.gray, 40) : color.new(color.green, 25)
+                array.push(lvlLines, line.new(ri3, buy3, x3, buy3, color=color.new(color.orange, 40), width=1))
+                array.push(lvlLines, line.new(bo3, stp3, x3, stp3, color=color.new(color.red, 55), width=1, style=line.style_dotted))
+                array.push(lvlLines, line.new(bo3, tgt3, x3, tgt3, color=color.new(color.green, 55), width=1, style=line.style_dotted))
+                array.push(tags, label.new(bo3, low[bar_index - (bo3)], "BUY " + str.tostring(ent3, format.mintick), style=label.style_label_up, color=color.new(color.orange, 20), textcolor=color.white, size=size.tiny))
+                array.push(tags, label.new(x3, bad ? stp3 : tgt3, out3, style=label.style_label_left, color=oc3, textcolor=color.white, size=size.tiny))
+                openTill := na(res3) ? lastB : res3
 
 plot(sma50,  "50 SMA",  color=color.new(color.blue, 40))
 plot(sma200, "200 SMA", color=color.new(color.gray, 20))
