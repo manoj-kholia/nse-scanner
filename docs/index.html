@@ -865,11 +865,22 @@ function cell(r, k){
     case "gap": return r.gap == null ? "–" :
       '<span class="' + sgn(r.gap) + '">' + (r.gap > 0 ? "+" : "") + r.gap.toFixed(2) + "%</span>";
     case "atr": case "irisk": return r[k] == null ? "–" : r[k].toFixed(2) + "%";
-    case "exit": return r.exit == null ? "–" :
-      '<span class="exitrule" title="Square off at your broker\'s intraday cut-off. '
-      + 'Measured on 179 trades: holding to the close returned +0.132R, a 1R target '
-      + '-0.053R, a 2R target -0.001R. Capping the winners is what loses the money.">'
-      + "at " + esc(r.exit) + "</span>";
+    case "exit": {
+      // "Exit" means two different things in two different tables, and this
+      // switch serves both. In Play's exit is a RULE ("at the close"); the
+      // journal's is a PRICE, or nothing at all while a position is open. The
+      // In Play branch used to come first and swallowed the journal's, which
+      // is why logged trades read "at 190.82" instead of a price.
+      if(view === "log")
+        return r.open
+          ? '<span class="pill handle" title="Still open - no exit price yet, so there is no result to show.">OPEN</span>'
+          : inr(r.exit);
+      return r.exit == null ? "–" :
+        '<span class="exitrule" title="Square off at your broker\'s intraday cut-off. '
+        + 'Measured on 179 trades: holding to the close returned +0.132R, a 1R target '
+        + '-0.053R, a 2R target -0.001R. Capping the winners is what loses the money.">'
+        + "at " + esc(r.exit) + "</span>";
+    }
     case "be": return r.be == null ? "–" :
       '<span class="mono">' + r.be.toFixed(3) + "%</span>";
     case "cva": {
@@ -892,9 +903,6 @@ function cell(r, k){
       (r.side === "L" ? "LONG" : "SHORT") + ((r.product || "I") === "D" ? " \u00B7 CNC" : " \u00B7 MIS") + "</span>";
     case "qty": return '<span class="mono">' + (r.qty == null ? "\u2013" : r.qty.toLocaleString("en-IN")) + "</span>";
     case "entry": return inr(r.entry);
-    case "exit": return r.open
-      ? '<span class="pill handle" title="Still open - no exit price yet, so there is no result to show.">OPEN</span>'
-      : inr(r.exit);
     case "gross": case "net": return r[k] == null ? "\u2013" :
       '<span class="' + sgn(r[k]) + ' mono">' + (r[k] >= 0 ? "+" : "\u2212") + inr(Math.abs(r[k])).slice(1) + "</span>";
     case "costs": return r.costs == null ? "\u2013" : '<span class="mono">' + inr(r.costs) + "</span>";
