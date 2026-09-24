@@ -47,13 +47,15 @@ import find_patterns as fp
 HERE = os.path.dirname(os.path.abspath(__file__))
 
 
-def _first_cup_at(high, low, close, pivots, ri, p):
+def _first_cup_at(high, low, close, pivots, ri, p, hist_from=0):
     """The cup ending at right rim `ri`, searched newest left rim first.
 
     Same order as find_cup, so a setup recorded here is one the live scanner
     would have returned on that day.
     """
     for li in reversed([q for q in pivots if q < ri]):
+        if li < hist_from:
+            break
         length = ri - li
         if length > p["cup_max"]:
             break
@@ -65,12 +67,19 @@ def _first_cup_at(high, low, close, pivots, ri, p):
     return None
 
 
-def scan_history(df, p=fp.P, one_at_a_time=True):
+def scan_history(df, p=fp.P, one_at_a_time=True, max_setups=0, hist_bars=0,
+                 exclude_live=False, fwd_max=0):
     """Return a list of setups, oldest first, each with its outcome.
 
     one_at_a_time models what a delivery trader actually does: while a position
     is open, a second base in the same stock is noted but not taken. It also
     stops one cup being counted twice when two adjacent pivots both qualify.
+
+    The last four arguments exist so pine_parity.py can run this under exactly
+    the limits the chart works under - the chart keeps only the newest N setups
+    inside its history window, never redraws the live base, and stops following
+    a trade after pastFwd bars. They default to "no limit", which is what you
+    want when reading the record yourself.
     """
     high = df["High"].to_numpy(float)
     low = df["Low"].to_numpy(float)
@@ -85,16 +94,31 @@ def scan_history(df, p=fp.P, one_at_a_time=True):
     avg_vol = pd.Series(vol).rolling(p["vol_len"]).mean().to_numpy()
     sma200 = pd.Series(close).rolling(200).mean().to_numpy()
 
+    last_bar = n - 1
+    hist_from = max(0, last_bar - hist_bars + 1) if hist_bars else 0
+
+    # The chart draws the newest `max_setups` bases and never redraws the live
+    # one, so under those limits the SET of rims has to be picked newest-first
+    # and then replayed oldest-first - a cap applied from the old end would
+    # keep a different set and the two would disagree for no good reason.
+    rims = []
+    for ri in reversed(pivots):
+        if max_setups and len(rims) >= max_setups:
+            break
+        if ri < hist_from or ri + p["piv"] >= n:
+            continue
+        if exclude_live and last_bar - ri <= p["handle_max"]:
+            continue
+        cup = _first_cup_at(high, low, close, pivots, ri, p, hist_from)
+        if cup is not None:
+            rims.append((ri, cup))
+    rims.reverse()
+
     out = []
     open_until = -1                       # bar index a live trade closes on
 
-    for ri in pivots:
+    for ri, cup in rims:
         confirmed = ri + p["piv"]         # the rim cannot be KNOWN before this
-        if confirmed >= n:
-            break
-        cup = _first_cup_at(high, low, close, pivots, ri, p)
-        if cup is None:
-            continue
 
         buy = cup["buy"]
         mid = cup["cup_low"] + (buy - cup["cup_low"]) / 2
@@ -105,12 +129,12 @@ def scan_history(df, p=fp.P, one_at_a_time=True):
             depth_pct=round(cup["depth"] * 100, 1),
             outcome="", entry=None, entry_date=None, stop=None, target=None,
             bars_held=None, exit_price=None, pct=None, mfe_pct=None,
-            note="",
+            entry_bar=None, exit_bar=None, note="",
         )
 
         # --- walk the handle forward -------------------------------------
         bo = None
-        for j in range(max(ri + 1, confirmed), n):
+        for j in range(ri + 1, n):
             days = j - ri
             if days > p["handle_max"]:
                 rec["outcome"] = "EXPIRED"
@@ -122,7 +146,12 @@ def scan_history(df, p=fp.P, one_at_a_time=True):
                 rec["note"] = (f"handle low {h_low:.2f} fell through "
                                f"{'the middle of the cup' if h_low < mid else 'the depth limit'}")
                 break
-            if days < p["handle_min"]:
+            # You cannot buy off a rim you do not yet know is a rim. The pivot
+            # at `ri` is only confirmed piv bars later, so a "breakout" before
+            # then is one nobody could have taken. With the defaults
+            # handle_min == piv and this changes nothing; set handle_min below
+            # piv and it is the difference between a record and a fiction.
+            if days < max(p["handle_min"], p["piv"]):
                 continue
             if cup["length"] + days < p["base_min"]:
                 continue
@@ -139,7 +168,7 @@ def scan_history(df, p=fp.P, one_at_a_time=True):
                                                   ri + 1, j, buy, p)
             if (slope is not None and slope > p["handle_slope"]
                     and (tstat is None or tstat > p["handle_slope_t"])):
-                rec["outcome"] = "BROKE DOWN"
+                rec["outcome"] = "WEDGED UP"
                 rec["note"] = f"handle wedged upward ({slope:+.3f}%/day, t {tstat})"
                 break
             if dry is not None and dry > p["handle_vol"]:
@@ -166,10 +195,11 @@ def scan_history(df, p=fp.P, one_at_a_time=True):
         stop = fp.oneil_stop(entry, h_low)
         target = buy * (1 + p["profit_take"])
         rec.update(entry=round(entry, 2), entry_date=str(idx[bo])[:10],
-                   stop=round(stop, 2), target=round(target, 2))
+                   stop=round(stop, 2), target=round(target, 2), entry_bar=bo)
 
         peak = entry
-        for k in range(bo + 1, n):
+        k_end = min(n - 1, bo + fwd_max) if fwd_max else n - 1
+        for k in range(bo + 1, k_end + 1):
             peak = max(peak, float(high[k]))
             hit_stop = low[k] <= stop
             hit_tgt = high[k] >= target
@@ -178,18 +208,18 @@ def scan_history(df, p=fp.P, one_at_a_time=True):
                 # bar does not. Counting it as the target is how a backtest
                 # lies to itself, so it is counted as the stop and flagged.
                 rec.update(outcome="AMBIGUOUS", exit_price=round(stop, 2),
-                           bars_held=k - bo,
+                           bars_held=k - bo, exit_bar=k,
                            note="stop and target both touched on the same day; "
                                 "counted as the stop")
                 break
             if hit_stop:
                 rec.update(outcome="STOPPED", exit_price=round(stop, 2),
-                           bars_held=k - bo)
+                           bars_held=k - bo, exit_bar=k)
                 break
             if hit_tgt:
                 fast = (k - bo) < p["hold_sessions"]
                 rec.update(outcome="TARGET", exit_price=round(target, 2),
-                           bars_held=k - bo,
+                           bars_held=k - bo, exit_bar=k,
                            note=(f"+{p['profit_take']*100:.0f}% in {k - bo} sessions - "
                                  f"O'Neil's exception says hold the full "
                                  f"{p['hold_sessions']} and reassess" if fast else ""))

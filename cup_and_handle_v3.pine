@@ -651,7 +651,12 @@ if showPast and barstate.islast
                 if hLo3 < mid3 or (buy3 - hLo3) / buy3 > handleDepth
                     why3 := "broke down"
                     break
-                if j - ri3 < handleMin
+                // You cannot buy off a rim you do not yet know is a rim: the
+                // pivot at ri3 is only confirmed pivLen bars later. With the
+                // defaults handleMin == pivLen and this changes nothing; set
+                // handleMin below pivLen and it is the difference between a
+                // record and a fiction.
+                if j - ri3 < math.max(handleMin, pivLen)
                     continue
                 if len3 + (j - ri3) < baseMin
                     continue
