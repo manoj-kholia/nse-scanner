@@ -94,13 +94,20 @@ def _lookup(symbol, downloader=None):
 
 
 def refresh(symbols, cache=None, budget=DEFAULT_BUDGET, pause=0.4,
-            downloader=None, log=print):
+            downloader=None, log=print, max_seconds=420):
     """Top up the cache with symbols it has never seen. Returns the new cache.
 
     Only symbols with NO row at all are fetched. A symbol that came back blank
     keeps its blank row rather than being retried every single day - Yahoo
     simply does not carry an industry for some NSE names, and hammering it for
     those would spend the whole budget on the same failures forever.
+
+    `max_seconds` is a wall-clock cap, not a nicety. Ticker.info is one HTTP
+    round trip per symbol and its latency varies by an order of magnitude when
+    Yahoo is rate-limiting; a slow day could otherwise eat the whole GitHub
+    Actions job and lose the scan itself, which is the part that matters. On a
+    cap we keep what we have, write it, and pick up the rest tomorrow - the map
+    is meant to fill in over a fortnight anyway.
     """
     cache = load_cache() if cache is None else cache
     known = set(cache["Symbol"].astype(str))
@@ -109,18 +116,26 @@ def refresh(symbols, cache=None, budget=DEFAULT_BUDGET, pause=0.4,
         return cache
 
     rows = []
+    started = time.monotonic()
+    stopped_early = False
     for i, sym in enumerate(todo):
+        if time.monotonic() - started > max_seconds:
+            stopped_early = True
+            break
         g, s = _lookup(sym, downloader)
         rows.append({"Symbol": sym, "Group": g, "Sector": s,
                      "Checked": pd.Timestamp.now().strftime("%Y-%m-%d")})
         if pause and i < len(todo) - 1:
             time.sleep(pause)
 
+    if not rows:
+        return cache
     add = pd.DataFrame(rows)
     got = int(add["Group"].notna().sum())
     if log:
-        log(f"  industry map: looked up {len(todo)}, got {got} "
-            f"({len(known) + len(todo)} of {len(symbols)} symbols now cached)")
+        note = f" (stopped at the {max_seconds}s cap)" if stopped_early else ""
+        log(f"  industry map: looked up {len(rows)}, got {got}{note} "
+            f"({len(known) + len(rows)} of {len(symbols)} symbols now cached)")
     return save_cache(pd.concat([cache, add], ignore_index=True))
 
 
