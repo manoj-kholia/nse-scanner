@@ -49,7 +49,7 @@ jobs:
           git config user.email "actions@users.noreply.github.com"
 
           # Everything this run generates. Nothing else belongs here.
-          OUTPUTS="docs stocks_in_play.csv intraday_watchlist.txt intraday_status.json"
+          OUTPUTS="docs/intraday.json stocks_in_play.csv intraday_watchlist.txt intraday_status.json"
 
           stage() {
             for p in $OUTPUTS; do
