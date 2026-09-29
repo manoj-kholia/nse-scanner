@@ -1,10 +1,10 @@
 {
  "ok": true,
- "headline": "18 in play",
+ "headline": "20 in play",
  "detail": "All 200 symbols returned data.",
  "scanned": 200,
  "usable": 200,
- "kept": 18,
+ "kept": 20,
  "reasons": {},
- "checked": "28 Sep 2026, 04:11"
+ "checked": "29 Sep 2026, 04:10"
 }
