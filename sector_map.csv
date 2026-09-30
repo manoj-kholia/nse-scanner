@@ -167,6 +167,7 @@ ARIHANTSUP,,,2026-09-24
 ARIS,,,2026-09-24
 ARKADE,,,2026-09-24
 ARMANFIN,,,2026-09-24
+ARMEE,Information Technology Services,Technology,2026-09-30
 AROGRANITE,,,2026-09-24
 ARROWGREEN,,,2026-09-24
 ARSSBL,,,2026-09-24
@@ -596,6 +597,7 @@ ELDEHSG,Real Estate Services,Real Estate,2026-09-25
 ELECON,Specialty Industrial Machinery,Industrials,2026-09-25
 ELECTCAST,Building Products & Equipment,Industrials,2026-09-25
 ELECTHERM,Steel,Basic Materials,2026-09-25
+ELEVATE,Lodging,Consumer Cyclical,2026-09-30
 ELGIEQUIP,Specialty Industrial Machinery,Industrials,2026-09-25
 ELGIRUBCO,Auto Parts,Consumer Cyclical,2026-09-25
 ELIN,Electrical Equipment & Parts,Industrials,2026-09-25
@@ -1499,3 +1501,251 @@ ORISSAMINE,Steel,Basic Materials,2026-09-29
 ORKLAINDIA,Packaged Foods,Consumer Defensive,2026-09-29
 ORTINGLOBE,Drug Manufacturers - Specialty & Generic,Healthcare,2026-09-29
 OSWALAGRO,Real Estate - Development,Real Estate,2026-09-29
+OSWALGREEN,Asset Management,Financial Services,2026-09-30
+OSWALPUMPS,Electrical Equipment & Parts,Industrials,2026-09-30
+OSWALSEEDS,Agricultural Inputs,Basic Materials,2026-09-30
+PACEDIGITK,Communication Equipment,Technology,2026-09-30
+PACIFICI,Building Materials,Basic Materials,2026-09-30
+PAGEIND,Apparel Manufacturing,Consumer Cyclical,2026-09-30
+PAISALO,Credit Services,Financial Services,2026-09-30
+PAKKA,Paper & Paper Products,Basic Materials,2026-09-30
+PALASHSECU,Packaged Foods,Consumer Defensive,2026-09-30
+PALREDTEC,Consumer Electronics,Technology,2026-09-30
+PANACEABIO,Biotechnology,Healthcare,2026-09-30
+PANAMAPET,Oil & Gas Refining & Marketing,Energy,2026-09-30
+PANCHMAHQ,Steel,Basic Materials,2026-09-30
+PANORAMA,Entertainment,Communication Services,2026-09-30
+PANSARI,Real Estate - Development,Real Estate,2026-09-30
+PARACABLES,Communication Equipment,Technology,2026-09-30
+PARADEEP,Agricultural Inputs,Basic Materials,2026-09-30
+PARAGMILK,Packaged Foods,Consumer Defensive,2026-09-30
+PARAS,Aerospace & Defense,Industrials,2026-09-30
+PARASPETRO,Textile Manufacturing,Consumer Cyclical,2026-09-30
+PARIN,"Furnishings, Fixtures & Appliances",Consumer Cyclical,2026-09-30
+PARKHOSPS,Medical Care Facilities,Healthcare,2026-09-30
+PARKHOTELS,Lodging,Consumer Cyclical,2026-09-30
+PARNAXLAB,Drug Manufacturers - Specialty & Generic,Healthcare,2026-09-30
+PASHUPATI,Textile Manufacturing,Consumer Cyclical,2026-09-30
+PASUPTAC,Textile Manufacturing,Consumer Cyclical,2026-09-30
+PATANJALI,Packaged Foods,Consumer Defensive,2026-09-30
+PATELENG,Engineering & Construction,Industrials,2026-09-30
+PATELRMART,Department Stores,Consumer Cyclical,2026-09-30
+PATINTLOG,Integrated Freight & Logistics,Industrials,2026-09-30
+PAUSHAKLTD,Specialty Chemicals,Basic Materials,2026-09-30
+PAVNAIND,Auto Parts,Consumer Cyclical,2026-09-30
+PAYTM,Software - Infrastructure,Technology,2026-09-30
+PBMPOLY,Textile Manufacturing,Consumer Cyclical,2026-09-30
+PCBL,Specialty Chemicals,Basic Materials,2026-09-30
+PCJEWELLER,Luxury Goods,Consumer Cyclical,2026-09-30
+PDMJEPAPER,Paper & Paper Products,Basic Materials,2026-09-30
+PDSL,Specialty Business Services,Industrials,2026-09-30
+PEARLPOLY,Packaging & Containers,Consumer Cyclical,2026-09-30
+PENIND,Specialty Industrial Machinery,Industrials,2026-09-30
+PENINLAND,Real Estate - Development,Real Estate,2026-09-30
+PERMAGN,Electrical Equipment & Parts,Industrials,2026-09-30
+PERNIASPOP,Apparel Retail,Consumer Cyclical,2026-09-30
+PERSISTENT,Information Technology Services,Technology,2026-09-30
+PETRONET,Oil & Gas Refining & Marketing,Energy,2026-09-30
+PFC,Credit Services,Financial Services,2026-09-30
+PFIZER,Drug Manufacturers - General,Healthcare,2026-09-30
+PFOCUS,Entertainment,Communication Services,2026-09-30
+PFS,Credit Services,Financial Services,2026-09-30
+PGEL,Electronic Components,Technology,2026-09-30
+PGHH,Household & Personal Products,Consumer Defensive,2026-09-30
+PGHL,Drug Manufacturers - Specialty & Generic,Healthcare,2026-09-30
+PGIL,Apparel Manufacturing,Consumer Cyclical,2026-09-30
+PHOENIXLTD,Real Estate - Diversified,Real Estate,2026-09-30
+PHOENXINTL,Footwear & Accessories,Consumer Cyclical,2026-09-30
+PICCADIL,Beverages - Wineries & Distilleries,Consumer Defensive,2026-09-30
+PIDILITIND,Specialty Chemicals,Basic Materials,2026-09-30
+PIGL,Engineering & Construction,Industrials,2026-09-30
+PIIND,Agricultural Inputs,Basic Materials,2026-09-30
+PILANIINVS,Asset Management,Financial Services,2026-09-30
+PILITA,"Furnishings, Fixtures & Appliances",Consumer Cyclical,2026-09-30
+PINELABS,Software - Infrastructure,Technology,2026-09-30
+PIONEEREMB,Textile Manufacturing,Consumer Cyclical,2026-09-30
+PIRAMALFIN,Credit Services,Financial Services,2026-09-30
+PITTIENG,Metal Fabrication,Industrials,2026-09-30
+PIXTRANS,Specialty Industrial Machinery,Industrials,2026-09-30
+PLASTIBLEN,Specialty Chemicals,Basic Materials,2026-09-30
+PLATIND,Specialty Chemicals,Basic Materials,2026-09-30
+PLAZACABLE,Electrical Equipment & Parts,Industrials,2026-09-30
+PML,Capital Markets,Financial Services,2026-09-30
+PNB,Banks - Regional,Financial Services,2026-09-30
+PNBGILTS,Capital Markets,Financial Services,2026-09-30
+PNBHOUSING,Mortgage Finance,Financial Services,2026-09-30
+PNC,Entertainment,Communication Services,2026-09-30
+PNCINFRA,Engineering & Construction,Industrials,2026-09-30
+PNGJL,Luxury Goods,Consumer Cyclical,2026-09-30
+PNGSREVA,Luxury Goods,Consumer Cyclical,2026-09-30
+POCL,Specialty Chemicals,Basic Materials,2026-09-30
+PODDARMENT,Specialty Chemicals,Basic Materials,2026-09-30
+POEL,Chemicals,Basic Materials,2026-09-30
+POKARNA,Building Products & Equipment,Industrials,2026-09-30
+POLICYBZR,Insurance Brokers,Financial Services,2026-09-30
+POLYCAB,Electrical Equipment & Parts,Industrials,2026-09-30
+POLYMED,Medical Instruments & Supplies,Healthcare,2026-09-30
+POLYPLEX,Specialty Chemicals,Basic Materials,2026-09-30
+POLYSPIN,Packaging & Containers,Consumer Cyclical,2026-09-30
+PONNIERODE,Confectioners,Consumer Defensive,2026-09-30
+POONAWALLA,Credit Services,Financial Services,2026-09-30
+POWERGRID,Utilities - Regulated Electric,Utilities,2026-09-30
+POWERICA,Specialty Industrial Machinery,Industrials,2026-09-30
+POWERINDIA,Electrical Equipment & Parts,Industrials,2026-09-30
+POWERMECH,Engineering & Construction,Industrials,2026-09-30
+PPLPHARMA,Drug Manufacturers - Specialty & Generic,Healthcare,2026-09-30
+PRABHA,Oil & Gas E&P,Energy,2026-09-30
+PRAENG,Real Estate - Development,Real Estate,2026-09-30
+PRAJIND,Engineering & Construction,Industrials,2026-09-30
+PRAKASH,Steel,Basic Materials,2026-09-30
+PRAKASHSTL,Steel,Basic Materials,2026-09-30
+PRANAV,Real Estate - Development,Real Estate,2026-09-30
+PRASOLCHEM,Specialty Chemicals,Basic Materials,2026-09-30
+PRAVEG,Advertising Agencies,Communication Services,2026-09-30
+PRAXIS,Specialty Retail,Consumer Cyclical,2026-09-30
+PRECAM,Auto Parts,Consumer Cyclical,2026-09-30
+PRECOT,Textile Manufacturing,Consumer Cyclical,2026-09-30
+PRECWIRE,Electrical Equipment & Parts,Industrials,2026-09-30
+PREMCO,Textile Manufacturing,Consumer Cyclical,2026-09-30
+PREMEXPLN,Specialty Chemicals,Basic Materials,2026-09-30
+PREMIERENE,Solar,Technology,2026-09-30
+PREMIERPOL,Specialty Chemicals,Basic Materials,2026-09-30
+PRESTIGE,Real Estate - Diversified,Real Estate,2026-09-30
+PRICOLLTD,Auto Parts,Consumer Cyclical,2026-09-30
+PRIMESECU,Capital Markets,Financial Services,2026-09-30
+PRIMO,Chemicals,Basic Materials,2026-09-30
+PRINCEPIPE,Building Products & Equipment,Industrials,2026-09-30
+PRIORITY,Luxury Goods,Consumer Cyclical,2026-09-30
+PRISMX,Capital Markets,Financial Services,2026-09-30
+PRITI,"Furnishings, Fixtures & Appliances",Consumer Cyclical,2026-09-30
+PRITIKAUTO,Specialty Industrial Machinery,Industrials,2026-09-30
+PRIVISCL,Specialty Chemicals,Basic Materials,2026-09-30
+PROSTARM,Electrical Equipment & Parts,Industrials,2026-09-30
+PROTEAN,Information Technology Services,Technology,2026-09-30
+PROZONER,Real Estate - Diversified,Real Estate,2026-09-30
+PRSMJOHNSN,Building Materials,Basic Materials,2026-09-30
+PRUDENT,Asset Management,Financial Services,2026-09-30
+PRUDMOULI,Confectioners,Consumer Defensive,2026-09-30
+PSB,Banks - Regional,Financial Services,2026-09-30
+PSPPROJECT,Engineering & Construction,Industrials,2026-09-30
+PTC,Utilities - Independent Power Producers,Utilities,2026-09-30
+PTCIL,Metal Fabrication,Industrials,2026-09-30
+PTL,Real Estate Services,Real Estate,2026-09-30
+PUNJABCHEM,Chemicals,Basic Materials,2026-09-30
+PURVA,Real Estate - Development,Real Estate,2026-09-30
+PVP,Conglomerates,Industrials,2026-09-30
+PVRINOX,Entertainment,Communication Services,2026-09-30
+PVSL,Auto & Truck Dealerships,Consumer Cyclical,2026-09-30
+PWL,Education & Training Services,Consumer Defensive,2026-09-30
+PYRAMID,Packaging & Containers,Consumer Cyclical,2026-09-30
+QPOWER,Electrical Equipment & Parts,Industrials,2026-09-30
+QUADFUTURE,Railroads,Industrials,2026-09-30
+QUESS,Staffing & Employment Services,Industrials,2026-09-30
+QUICKHEAL,Software - Application,Technology,2026-09-30
+QUINTEGRA,Information Technology Services,Technology,2026-09-30
+RACE,Waste Management,Industrials,2026-09-30
+RACLGEAR,Auto Parts,Consumer Cyclical,2026-09-30
+RADAAN,Entertainment,Communication Services,2026-09-30
+RADIANTCMS,Specialty Business Services,Industrials,2026-09-30
+RADICO,Beverages - Wineries & Distilleries,Consumer Defensive,2026-09-30
+RADIOCITY,Broadcasting,Communication Services,2026-09-30
+RAILTEL,Telecom Services,Communication Services,2026-09-30
+RAIN,Specialty Chemicals,Basic Materials,2026-09-30
+RAINBOW,Medical Care Facilities,Healthcare,2026-09-30
+RAJMET,Copper,Basic Materials,2026-09-30
+RAJPALAYAM,Textile Manufacturing,Consumer Cyclical,2026-09-30
+RAJRATAN,Steel,Basic Materials,2026-09-30
+RAJSREESUG,Confectioners,Consumer Defensive,2026-09-30
+RAJTV,Broadcasting,Communication Services,2026-09-30
+RALLIS,Agricultural Inputs,Basic Materials,2026-09-30
+RAMANEWS,Beverages - Non-Alcoholic,Consumer Defensive,2026-09-30
+RAMAPHO,Agricultural Inputs,Basic Materials,2026-09-30
+RAMBHAJO,Luxury Goods,Consumer Cyclical,2026-09-30
+RAMCOCEM,Building Materials,Basic Materials,2026-09-30
+RAMCOIND,Building Products & Equipment,Industrials,2026-09-30
+RAMCOSYS,Software - Application,Technology,2026-09-30
+RAMKY,Engineering & Construction,Industrials,2026-09-30
+RAMRAT,Electrical Equipment & Parts,Industrials,2026-09-30
+RANASUG,Confectioners,Consumer Defensive,2026-09-30
+RANEHOLDIN,Auto Parts,Consumer Cyclical,2026-09-30
+RATEGAIN,Software - Application,Technology,2026-09-30
+RATNAMANI,Steel,Basic Materials,2026-09-30
+RATNAVEER,Steel,Basic Materials,2026-09-30
+RAYMOND,Specialty Industrial Machinery,Industrials,2026-09-30
+RAYMONDLSL,Apparel Manufacturing,Consumer Cyclical,2026-09-30
+RAYMONDREL,Real Estate - Development,Real Estate,2026-09-30
+RBA,Restaurants,Consumer Cyclical,2026-09-30
+RBLBANK,Banks - Regional,Financial Services,2026-09-30
+RCF,Agricultural Inputs,Basic Materials,2026-09-30
+RECLTD,Credit Services,Financial Services,2026-09-30
+REDINGTON,Information Technology Services,Technology,2026-09-30
+REDTAPE,Footwear & Accessories,Consumer Cyclical,2026-09-30
+REFEX,Thermal Coal,Energy,2026-09-30
+REGAAL,Packaged Foods,Consumer Defensive,2026-09-30
+REGENCERAM,Building Products & Equipment,Industrials,2026-09-30
+RELAXO,Footwear & Accessories,Consumer Cyclical,2026-09-30
+RELCHEMQ,Textile Manufacturing,Consumer Cyclical,2026-09-30
+RELIABLE,Information Technology Services,Technology,2026-09-30
+RELIANCE,Oil & Gas Refining & Marketing,Energy,2026-09-30
+RELIGARE,Insurance - Life,Financial Services,2026-09-30
+RELTD,Solar,Technology,2026-09-30
+REMSONSIND,Auto Parts,Consumer Cyclical,2026-09-30
+RENTOMOJO,Rental & Leasing Services,Industrials,2026-09-30
+RENUKA,Confectioners,Consumer Defensive,2026-09-30
+REPCOHOME,Mortgage Finance,Financial Services,2026-09-30
+REPL,Consulting Services,Industrials,2026-09-30
+REPRO,Specialty Business Services,Industrials,2026-09-30
+RESPONIND,Specialty Chemicals,Basic Materials,2026-09-30
+RETAIL,Grocery Stores,Consumer Defensive,2026-09-30
+RGL,Luxury Goods,Consumer Cyclical,2026-09-30
+RHETAN,Steel,Basic Materials,2026-09-30
+RHIM,Metal Fabrication,Industrials,2026-09-30
+RHL,Lodging,Consumer Cyclical,2026-09-30
+RICOAUTO,Auto Parts,Consumer Cyclical,2026-09-30
+RIIL,Engineering & Construction,Industrials,2026-09-30
+RIR,Semiconductors,Technology,2026-09-30
+RISHABH,Scientific & Technical Instruments,Technology,2026-09-30
+RITCO,Integrated Freight & Logistics,Industrials,2026-09-30
+RITES,Engineering & Construction,Industrials,2026-09-30
+RKDL,Beverages - Wineries & Distilleries,Consumer Defensive,2026-09-30
+RKEC,Engineering & Construction,Industrials,2026-09-30
+RKFORGE,Metal Fabrication,Industrials,2026-09-30
+RKSWAMY,Advertising Agencies,Communication Services,2026-09-30
+RMC,Electrical Equipment & Parts,Industrials,2026-09-30
+RML,Auto Parts,Consumer Cyclical,2026-09-30
+ROHLTD,Lodging,Consumer Cyclical,2026-09-30
+ROLEXRINGS,Metal Fabrication,Industrials,2026-09-30
+ROML,Packaged Foods,Consumer Defensive,2026-09-30
+ROSSARI,Specialty Chemicals,Basic Materials,2026-09-30
+ROSSELLIND,Conglomerates,Industrials,2026-09-30
+ROSSTECH,Aerospace & Defense,Industrials,2026-09-30
+ROTO,Specialty Industrial Machinery,Industrials,2026-09-30
+ROUTE,Telecom Services,Communication Services,2026-09-30
+RPEL,Chemicals,Basic Materials,2026-09-30
+RPGLIFE,Drug Manufacturers - Specialty & Generic,Healthcare,2026-09-30
+RPOWER,Utilities - Independent Power Producers,Utilities,2026-09-30
+RPPINFRA,Engineering & Construction,Industrials,2026-09-30
+RPSGVENT,Information Technology Services,Technology,2026-09-30
+RPTECH,Electronics & Computer Distribution,Technology,2026-09-30
+RRECL,Real Estate Services,Real Estate,2026-09-30
+RRIL,Textile Manufacturing,Consumer Cyclical,2026-09-30
+RRKABEL,Electrical Equipment & Parts,Industrials,2026-09-30
+RSL,Steel,Basic Materials,2026-09-30
+RSSOFTWARE,Information Technology Services,Technology,2026-09-30
+RSWM,Textile Manufacturing,Consumer Cyclical,2026-09-30
+RSYSTEMS,Information Technology Services,Technology,2026-09-30
+RTNINDIA,Internet Retail,Consumer Cyclical,2026-09-30
+RTNPOWER,Utilities - Independent Power Producers,Utilities,2026-09-30
+RTSPOWR,Electrical Equipment & Parts,Industrials,2026-09-30
+RUBFILA,Specialty Chemicals,Basic Materials,2026-09-30
+RUBICON,Drug Manufacturers - General,Healthcare,2026-09-30
+RUBYMILLS,Textile Manufacturing,Consumer Cyclical,2026-09-30
+RUCHINFRA,Specialty Business Services,Industrials,2026-09-30
+RUCHIRA,Paper & Paper Products,Basic Materials,2026-09-30
+RUDRA,Steel,Basic Materials,2026-09-30
+RUPA,Apparel Manufacturing,Consumer Cyclical,2026-09-30
+RUSHIL,"Furnishings, Fixtures & Appliances",Consumer Cyclical,2026-09-30
+RUSTOMJEE,Real Estate - Development,Real Estate,2026-09-30
+RVHL,Real Estate - Development,Real Estate,2026-09-30
+RVNL,Engineering & Construction,Industrials,2026-09-30
+RVTH,Farm & Heavy Construction Machinery,Industrials,2026-09-30
