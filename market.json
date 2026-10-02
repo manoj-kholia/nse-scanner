@@ -10,7 +10,7 @@
  "rising_50dma": false,
  "sma50": 23870.1,
  "sma200": 24355.76,
- "distribution_days": 10,
+ "distribution_days": 11,
  "distribution_window": 25,
  "distribution_detail": [
   {
@@ -52,8 +52,12 @@
   {
    "date": "2026-09-29",
    "pct": -0.28
+  },
+  {
+   "date": "2026-10-01",
+   "pct": -0.88
   }
  ],
  "pct_off_52w_high": -14.98,
- "checked": "01 Oct 2026, 18:44 IST"
+ "checked": "02 Oct 2026, 18:42 IST"
 }
