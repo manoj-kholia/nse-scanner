@@ -13,6 +13,7 @@ AADHARHFC,,,2026-09-24
 AAKASH,,,2026-09-24
 AAREYDRUGS,,,2026-09-24
 AARON,,,2026-09-24
+AARTECH,,,2026-10-12
 AARTIDRUGS,,,2026-09-24
 AARTIIND,,,2026-09-24
 AARTIPHARM,,,2026-09-24
@@ -318,6 +319,7 @@ BHAGYANGR,Copper,Basic Materials,2026-09-24
 BHANDARI,Apparel Manufacturing,Consumer Cyclical,2026-09-24
 BHARATCOAL,Coking Coal,Basic Materials,2026-09-24
 BHARATFORG,Metal Fabrication,Industrials,2026-09-24
+BHARATGEAR,,,2026-10-12
 BHARATRAS,Agricultural Inputs,Basic Materials,2026-09-24
 BHARATSE,Auto Parts,Consumer Cyclical,2026-09-24
 BHARATWIRE,Steel,Basic Materials,2026-09-24
@@ -377,6 +379,7 @@ BSHSL,Agricultural Inputs,Basic Materials,2026-09-24
 BSL,Textile Manufacturing,Consumer Cyclical,2026-09-24
 BSOFT,Information Technology Services,Technology,2026-09-24
 BTML,Entertainment,Communication Services,2026-09-24
+BTTL,,,2026-10-12
 BUILDPRO,Home Improvement Retail,Consumer Cyclical,2026-09-24
 BUTTERFLY,"Furnishings, Fixtures & Appliances",Consumer Cyclical,2026-09-24
 BVCL,Building Materials,Basic Materials,2026-09-24
@@ -424,6 +427,7 @@ CGVAK,Software - Application,Technology,2026-09-24
 CHALET,Lodging,Consumer Cyclical,2026-09-24
 CHAMBLFERT,Agricultural Inputs,Basic Materials,2026-09-24
 CHEMBOND,Specialty Chemicals,Basic Materials,2026-09-24
+CHEMBONDCH,,,2026-10-12
 CHEMCON,,,2026-09-28
 CHEMCRUX,Specialty Chemicals,Basic Materials,2026-09-24
 CHEMFAB,Specialty Chemicals,Basic Materials,2026-09-24
@@ -498,6 +502,7 @@ DABUR,Household & Personal Products,Consumer Defensive,2026-09-24
 DALBHARAT,Building Materials,Basic Materials,2026-09-24
 DALMIASUG,Confectioners,Consumer Defensive,2026-09-24
 DAMCAPITAL,Capital Markets,Financial Services,2026-09-24
+DAMODARIND,,,2026-10-12
 DANGEE,Restaurants,Consumer Cyclical,2026-09-24
 DATAMATICS,Information Technology Services,Technology,2026-09-24
 DATAPATTNS,Aerospace & Defense,Industrials,2026-09-24
@@ -507,6 +512,7 @@ DBEIL,Engineering & Construction,Industrials,2026-09-24
 DBL,Engineering & Construction,Industrials,2026-09-24
 DBOL,Farm Products,Consumer Defensive,2026-09-24
 DBREALTY,Real Estate - Development,Real Estate,2026-09-24
+DBSTOCKBRO,,,2026-10-12
 DCAL,Biotechnology,Healthcare,2026-09-24
 DCBBANK,Banks - Regional,Financial Services,2026-09-24
 DCI,Electronics & Computer Distribution,Technology,2026-09-24
@@ -733,6 +739,7 @@ GICHSGFIN,Mortgage Finance,Financial Services,2026-09-25
 GICRE,Insurance - Reinsurance,Financial Services,2026-09-25
 GILLANDERS,Farm Products,Consumer Defensive,2026-09-25
 GILLETTE,Household & Personal Products,Consumer Defensive,2026-09-25
+GINNIFILA,,,2026-10-12
 GIPCL,Utilities - Regulated Electric,Utilities,2026-09-25
 GKB,Medical Instruments & Supplies,Healthcare,2026-09-25
 GKENERGY,Utilities - Renewable,Utilities,2026-09-25
@@ -1009,6 +1016,7 @@ ITI,,,2026-09-28
 ITL,,,2026-09-28
 IVALUE,,,2026-09-28
 IVC,,,2026-09-28
+IVP,,,2026-10-12
 IWP,,,2026-09-28
 IXIGO,,,2026-09-28
 IZMO,,,2026-09-28
@@ -1100,6 +1108,7 @@ KAPSTON,Specialty Business Services,Industrials,2026-09-28
 KARAMTARA,Solar,Technology,2026-09-28
 KARMAENG,Utilities - Renewable,Utilities,2026-09-28
 KARURVYSYA,Banks - Regional,Financial Services,2026-09-28
+KAUSHALYA,,,2026-10-12
 KAYNES,Electronic Components,Technology,2026-09-28
 KCP,Building Materials,Basic Materials,2026-09-28
 KDDL,Luxury Goods,Consumer Cyclical,2026-09-28
@@ -1303,6 +1312,7 @@ MAXESTATES,Real Estate - Development,Real Estate,2026-09-29
 MAXHEALTH,Medical Care Facilities,Healthcare,2026-09-29
 MAXIND,Medical Care Facilities,Healthcare,2026-09-29
 MAYURUNIQ,Textile Manufacturing,Consumer Cyclical,2026-09-29
+MAZDA,,,2026-10-12
 MAZDOCK,Aerospace & Defense,Industrials,2026-09-29
 MBAPL,Agricultural Inputs,Basic Materials,2026-09-29
 MBEL,Engineering & Construction,Industrials,2026-09-29
@@ -1484,6 +1494,7 @@ NYKAA,Internet Retail,Consumer Cyclical,2026-09-29
 OAL,Specialty Chemicals,Basic Materials,2026-09-29
 OBCL,Trucking,Industrials,2026-09-29
 OBEROIRLTY,Real Estate - Development,Real Estate,2026-09-29
+OCCLLTD,,,2026-10-12
 ODIGMA,Advertising Agencies,Communication Services,2026-09-29
 ODYCORP,Capital Markets,Financial Services,2026-09-29
 OFSS,Software - Infrastructure,Technology,2026-09-29
@@ -1502,6 +1513,7 @@ ONESOURCE,Biotechnology,Healthcare,2026-09-29
 ONGC,Oil & Gas Integrated,Energy,2026-09-29
 ONIDA,"Furnishings, Fixtures & Appliances",Consumer Cyclical,2026-09-29
 ONIXSOLAR,Solar,Technology,2026-09-29
+ONMOBILE,,,2026-10-12
 ONWARDTEC,Information Technology Services,Technology,2026-09-29
 OPTIEMUS,Electronics & Computer Distribution,Technology,2026-09-29
 OPTIFIN,Chemicals,Basic Materials,2026-09-29
@@ -1780,6 +1792,7 @@ SAATVIKGL,Solar,Technology,2026-09-30
 SAB,Engineering & Construction,Industrials,2026-09-30
 SADBHAV,Engineering & Construction,Industrials,2026-09-30
 SADBHIN,Engineering & Construction,Industrials,2026-09-30
+SADHNANIQ,,,2026-10-12
 SAFARI,Footwear & Accessories,Consumer Cyclical,2026-09-30
 SAGARDEEP,Copper,Basic Materials,2026-09-30
 SAGCEM,Building Materials,Basic Materials,2026-09-30
@@ -1854,6 +1867,7 @@ SENORES,Drug Manufacturers - General,Healthcare,2026-09-30
 SEPC,Engineering & Construction,Industrials,2026-09-30
 SERVOTECH,Electrical Equipment & Parts,Industrials,2026-09-30
 SESHAPAPER,Paper & Paper Products,Basic Materials,2026-09-30
+SETCO,,,2026-10-12
 SETL,Specialty Industrial Machinery,Industrials,2026-09-30
 SFL,"Furnishings, Fixtures & Appliances",Consumer Cyclical,2026-09-30
 SGFIN,Capital Markets,Financial Services,2026-09-30
@@ -2066,6 +2080,7 @@ TAINWALCHM,,,2026-10-01
 TAJGVK,,,2026-10-01
 TAKE,,,2026-10-01
 TALBROAUTO,,,2026-10-01
+TAMBOLIIN,,,2026-10-12
 TANAA,,,2026-10-01
 TANLA,,,2026-10-01
 TARACHAND,,,2026-10-01
@@ -2126,6 +2141,7 @@ THOMASCOOK,,,2026-10-01
 THOMASCOTT,,,2026-10-01
 THYROCARE,,,2026-10-01
 TI,,,2026-10-01
+TICL,,,2026-10-12
 TIGERLOGS,,,2026-10-01
 TIIL,,,2026-10-01
 TIINDIA,,,2026-10-01
@@ -2267,6 +2283,7 @@ VINNY,,,2026-10-01
 VINYLINDIA,,,2026-10-01
 VIPCLOTHNG,,,2026-10-01
 VIPIND,,,2026-10-01
+VIPULLTD,,,2026-10-12
 VIRAT,,,2026-10-01
 VIRINCHI,,,2026-10-01
 VISACHROME,,,2026-10-01
