@@ -604,6 +604,7 @@ EFCIL,Real Estate Services,Real Estate,2026-09-25
 EICHERMOT,Auto Manufacturers,Consumer Cyclical,2026-09-25
 EIDPARRY,Agricultural Inputs,Basic Materials,2026-09-25
 EIEL,Engineering & Construction,Industrials,2026-09-25
+EIFFL,Packaged Foods,Consumer Defensive,2026-10-26
 EIHAHOTELS,Lodging,Consumer Cyclical,2026-09-25
 EIHOTEL,Lodging,Consumer Cyclical,2026-09-25
 EIMCOELECO,Farm & Heavy Construction Machinery,Industrials,2026-09-25
@@ -623,6 +624,7 @@ ELITECON,Tobacco,Consumer Defensive,2026-09-25
 ELLEN,Chemicals,Basic Materials,2026-09-25
 ELPROINTL,Real Estate Services,Real Estate,2026-09-25
 EMAMILTD,Household & Personal Products,Consumer Defensive,2026-09-25
+EMAMIPAP,Paper & Paper Products,Basic Materials,2026-10-26
 EMAMIREAL,Real Estate - Development,Real Estate,2026-09-25
 EMBDL,Real Estate - Diversified,Real Estate,2026-09-25
 EMCURE,Drug Manufacturers - Specialty & Generic,Healthcare,2026-09-25
@@ -1000,6 +1002,7 @@ INTENTECH,,,2026-09-28
 INTERARCH,,,2026-09-28
 INTLCONV,,,2026-09-28
 INVENTURE,,,2026-09-28
+INVPRECQ,Steel,Basic Materials,2026-10-26
 IOB,,,2026-09-28
 IOC,,,2026-09-28
 IOLCP,,,2026-09-28
@@ -1132,9 +1135,11 @@ KERNEX,Software - Application,Technology,2026-09-28
 KESORAMIND,Building Materials,Basic Materials,2026-09-28
 KEYFINSERV,Capital Markets,Financial Services,2026-09-28
 KFINTECH,Software - Application,Technology,2026-09-28
+KHADIM,Footwear & Accessories,Consumer Cyclical,2026-10-26
 KHAICHEM,Agricultural Inputs,Basic Materials,2026-09-28
 KHAITANLTD,Industrial Distribution,Industrials,2026-09-28
 KHANDSE,Capital Markets,Financial Services,2026-09-28
+KHAZANCHI,,,2026-10-26
 KICL,Asset Management,Financial Services,2026-09-28
 KILITCH,Drug Manufacturers - Specialty & Generic,Healthcare,2026-10-05
 KIMS,Medical Care Facilities,Healthcare,2026-09-28
@@ -1349,6 +1354,7 @@ MFSL,Insurance - Life,Financial Services,2026-09-29
 MGEL,Farm Products,Consumer Defensive,2026-09-29
 MGL,Utilities - Regulated Gas,Utilities,2026-09-29
 MHRIL,Resorts & Casinos,Consumer Cyclical,2026-09-29
+MICEL,Electronic Components,Technology,2026-10-26
 MIDHANI,Steel,Basic Materials,2026-09-29
 MIDWESTLTD,Building Materials,Basic Materials,2026-09-29
 MIIL,Real Estate - Development,Real Estate,2026-09-29
@@ -2035,6 +2041,7 @@ SUBEXLTD,Software - Application,Technology,2026-09-30
 SUBROS,Auto Parts,Consumer Cyclical,2026-09-30
 SUDARCOLOR,Specialty Chemicals,Basic Materials,2026-09-30
 SUDARSCHEM,Specialty Chemicals,Basic Materials,2026-09-30
+SUDARSHAN,,,2026-10-26
 SUDEEPPHRM,Drug Manufacturers - Specialty & Generic,Healthcare,2026-09-30
 SUKHJITS,Specialty Chemicals,Basic Materials,2026-09-30
 SULA,Beverages - Wineries & Distilleries,Consumer Defensive,2026-09-30
@@ -2245,6 +2252,7 @@ UNIVCABLES,,,2026-10-01
 UNOMINDA,,,2026-10-01
 UPHOT,,,2026-10-01
 UPL,,,2026-10-01
+URAVIDEF,Auto Parts,Consumer Cyclical,2026-10-26
 URBANCO,,,2026-10-01
 URJA,,,2026-10-01
 USHAMART,,,2026-10-01
@@ -2352,6 +2360,7 @@ WEIZMANIND,Textile Manufacturing,Consumer Cyclical,2026-10-01
 WEL,"Furnishings, Fixtures & Appliances",Consumer Cyclical,2026-10-01
 WELCORP,Steel,Basic Materials,2026-10-01
 WELENT,Engineering & Construction,Industrials,2026-10-01
+WELINV,Capital Markets,Financial Services,2026-10-26
 WELSPLSOL,Steel,Basic Materials,2026-10-01
 WELSPUNLIV,Textile Manufacturing,Consumer Cyclical,2026-10-01
 WENDT,Tools & Accessories,Industrials,2026-10-01
