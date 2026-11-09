@@ -3,13 +3,13 @@
  "verdict": "UNDER PRESSURE",
  "buy_breakouts": true,
  "advice": "Trade smaller and be selective. The uptrend is intact but institutions are selling into it.",
- "last": 24536.6,
- "day_change_pct": 2.4,
+ "last": 25030.35,
+ "day_change_pct": 2.01,
  "above_50dma": true,
  "above_200dma": true,
  "rising_50dma": false,
- "sma50": 23234.1,
- "sma200": 24002.44,
+ "sma50": 23248.02,
+ "sma200": 23998.93,
  "distribution_days": 5,
  "distribution_window": 25,
  "distribution_detail": [
@@ -34,6 +34,6 @@
    "pct": -0.54
   }
  ],
- "pct_off_52w_high": -6.96,
- "checked": "07 Nov 2026, 01:22 IST"
+ "pct_off_52w_high": -5.09,
+ "checked": "10 Nov 2026, 04:23 IST"
 }
