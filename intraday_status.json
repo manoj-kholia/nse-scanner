@@ -1,10 +1,12 @@
 {
  "ok": true,
- "headline": "14 in play",
- "detail": "All 200 symbols returned data.",
+ "headline": "12 in play",
+ "detail": "199 of 200 symbols had usable opening data.",
  "scanned": 200,
- "usable": 200,
- "kept": 14,
- "reasons": {},
- "checked": "18 Nov 2026, 12:39"
+ "usable": 199,
+ "kept": 12,
+ "reasons": {
+  "no data returned": 1
+ },
+ "checked": "19 Nov 2026, 12:30"
 }
