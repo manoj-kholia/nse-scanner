@@ -1,22 +1,18 @@
 {
  "index": "NIFTY 50",
- "verdict": "UNDER PRESSURE",
+ "verdict": "CONFIRMED UPTREND",
  "buy_breakouts": true,
- "advice": "Trade smaller and be selective. The uptrend is intact but institutions are selling into it.",
- "last": 25514.3,
- "day_change_pct": 1.14,
+ "advice": "Breakouts are worth taking at full position size.",
+ "last": 25800.6,
+ "day_change_pct": 1.12,
  "above_50dma": true,
  "above_200dma": true,
- "rising_50dma": false,
- "sma50": 23445.38,
- "sma200": 23995.5,
- "distribution_days": 3,
+ "rising_50dma": true,
+ "sma50": 23485.81,
+ "sma200": 23997.79,
+ "distribution_days": 2,
  "distribution_window": 25,
  "distribution_detail": [
-  {
-   "date": "2026-10-14",
-   "pct": -0.44
-  },
   {
    "date": "2026-10-21",
    "pct": -0.34
@@ -26,6 +22,6 @@
    "pct": -0.54
   }
  ],
- "pct_off_52w_high": -3.26,
- "checked": "21 Nov 2026, 02:26 IST"
+ "pct_off_52w_high": -2.17,
+ "checked": "24 Nov 2026, 06:04 IST"
 }
