@@ -3,13 +3,13 @@
  "verdict": "CONFIRMED UPTREND",
  "buy_breakouts": true,
  "advice": "Breakouts are worth taking at full position size.",
- "last": 25819.25,
- "day_change_pct": 1.85,
+ "last": 25884.5,
+ "day_change_pct": 0.25,
  "above_50dma": true,
  "above_200dma": true,
  "rising_50dma": true,
- "sma50": 23567.85,
- "sma200": 23999.94,
+ "sma50": 23615.99,
+ "sma200": 24003.92,
  "distribution_days": 3,
  "distribution_window": 25,
  "distribution_detail": [
@@ -26,6 +26,6 @@
    "pct": -1.75
   }
  ],
- "pct_off_52w_high": -2.1,
- "checked": "27 Nov 2026, 03:37 IST"
+ "pct_off_52w_high": -1.85,
+ "checked": "28 Nov 2026, 03:20 IST"
 }
